@@ -1,0 +1,243 @@
+### Worker API Testing
+# Worker API giờ được merge vào main server trên port 3000
+@baseUrl = http://localhost:3000
+@adminUrl = {{baseUrl}}/api/admin
+
+###
+# Health Check - Main Server
+GET {{baseUrl}}/health
+Content-Type: application/json
+
+###
+# Health Check - Worker Component
+GET {{adminUrl}}/health
+Content-Type: application/json
+
+###
+# Get All Games
+GET {{adminUrl}}/games
+Content-Type: application/json
+
+###
+# Initialize Game
+POST {{adminUrl}}/game/init
+Content-Type: application/json
+
+{
+  "gameId": "game-test-001",
+  "mapData": {
+    "width": 10,
+    "height": 10,
+    "terrain": [
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      [0, 1, 1, 0, 0, 0, 0, 1, 1, 0],
+      [0, 1, 0, 0, 0, 0, 0, 0, 1, 0],
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 2, 2, 0, 0, 0, 0],
+      [0, 0, 0, 0, 2, 2, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      [0, 1, 0, 0, 0, 0, 0, 0, 1, 0],
+      [0, 1, 1, 0, 0, 0, 0, 1, 1, 0],
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    ],
+    "treasures": [
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0, 80, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 100, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 150, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    ],
+    "waves": [
+      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+      [1, 2, 2, 1, 1, 1, 1, 2, 2, 1],
+      [1, 2, 1, 1, 1, 1, 1, 1, 2, 1],
+      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+      [1, 1, 1, 1, 3, 3, 1, 1, 1, 1],
+      [1, 1, 1, 1, 3, 3, 1, 1, 1, 1],
+      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+      [1, 2, 1, 1, 1, 1, 1, 1, 2, 1],
+      [1, 2, 2, 1, 1, 1, 1, 2, 2, 1],
+      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+    ],
+    "bases": [
+      [0, 0],
+      [9, 9]
+    ]
+  },
+  "players": [
+    {
+      "playerId": "player1",
+      "teamId": "team1",
+      "position": { "x": 0, "y": 0 },
+      "energy": 100
+    },
+    {
+      "playerId": "player2",
+      "teamId": "team2",
+      "position": { "x": 9, "y": 9 },
+      "energy": 100
+    }
+  ]
+}
+
+###
+# Start Game
+POST {{adminUrl}}/game/game-test-001/start
+Content-Type: application/json
+
+###
+# Get Game State
+GET {{adminUrl}}/game/game-test-001/state
+Content-Type: application/json
+
+###
+# Stop Game
+POST {{adminUrl}}/game/game-test-001/stop
+Content-Type: application/json
+
+###
+# Initialize Game with More Players
+POST {{adminUrl}}/game/init
+Content-Type: application/json
+
+{
+  "gameId": "game-test-002",
+  "mapData": {
+    "width": 15,
+    "height": 15,
+    "terrain": [
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      [0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0],
+      [0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0],
+      [0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0],
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 2, 2, 2, 2, 2, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 2, 0, 3, 0, 2, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 2, 2, 2, 2, 2, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      [0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0],
+      [0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0],
+      [0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0],
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    ],
+    "treasures": [
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 120, 0, 0, 0, 0, 0, 0, 0, 120, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0, 200, 0, 0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 120, 0, 0, 0, 0, 0, 0, 0, 120, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    ],
+    "waves": [
+      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+      [1, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 1],
+      [1, 2, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 2, 1],
+      [1, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 1],
+      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+      [1, 1, 1, 1, 1, 3, 3, 3, 3, 3, 1, 1, 1, 1, 1],
+      [1, 1, 1, 1, 1, 3, 1, 1, 1, 3, 1, 1, 1, 1, 1],
+      [1, 1, 1, 1, 1, 3, 1, 4, 1, 3, 1, 1, 1, 1, 1],
+      [1, 1, 1, 1, 1, 3, 1, 1, 1, 3, 1, 1, 1, 1, 1],
+      [1, 1, 1, 1, 1, 3, 3, 3, 3, 3, 1, 1, 1, 1, 1],
+      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+      [1, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 1],
+      [1, 2, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 1, 2, 1],
+      [1, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 1],
+      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+    ],
+    "bases": [
+      [0, 0],
+      [14, 0],
+      [0, 14],
+      [14, 14]
+    ]
+  },
+  "players": [
+    {
+      "playerId": "player1",
+      "teamId": "team1",
+      "position": { "x": 0, "y": 0 },
+      "energy": 100
+    },
+    {
+      "playerId": "player2",
+      "teamId": "team1",
+      "position": { "x": 1, "y": 0 },
+      "energy": 100
+    },
+    {
+      "playerId": "player3",
+      "teamId": "team2",
+      "position": { "x": 14, "y": 0 },
+      "energy": 100
+    },
+    {
+      "playerId": "player4",
+      "teamId": "team2",
+      "position": { "x": 13, "y": 0 },
+      "energy": 100
+    },
+    {
+      "playerId": "player5",
+      "teamId": "team3",
+      "position": { "x": 0, "y": 14 },
+      "energy": 100
+    },
+    {
+      "playerId": "player6",
+      "teamId": "team4",
+      "position": { "x": 14, "y": 14 },
+      "energy": 100
+    }
+  ]
+}
+
+###
+# Start Multi-team Game
+POST {{adminUrl}}/game/game-test-002/start
+Content-Type: application/json
+
+###
+# Get Multi-team Game State
+GET {{adminUrl}}/game/game-test-002/state
+Content-Type: application/json
+
+###
+# Error Case - Initialize without required fields
+POST {{adminUrl}}/game/init
+Content-Type: application/json
+
+{
+  "gameId": "game-test-003"
+}
+
+###
+# Error Case - Start non-existent game
+POST {{adminUrl}}/game/non-existent-game/start
+Content-Type: application/json
+
+###
+# Error Case - Get state of non-existent game
+GET {{adminUrl}}/game/non-existent-game/state
+Content-Type: application/json
+
+###
+# Stop Multi-team Game
+POST {{adminUrl}}/game/game-test-002/stop
+Content-Type: application/json

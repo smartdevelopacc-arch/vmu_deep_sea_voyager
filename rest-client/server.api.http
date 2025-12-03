@@ -1,0 +1,417 @@
+### Server API Testing (Player Actions & Game State)
+@serverUrl = http://localhost:3000
+@gameId = game-test-001
+@player1Id = player1
+@player2Id = player2
+
+###
+# ========================================
+# DEBUG / DATABASE ENDPOINTS
+# ========================================
+
+###
+# Get All Games from Database
+GET {{serverUrl}}/api/debug/db/games
+Content-Type: application/json
+
+###
+# Get Specific Game from Database
+GET {{serverUrl}}/api/debug/db/games/{{gameId}}
+Content-Type: application/json
+
+###
+# Delete Game from Database
+DELETE {{serverUrl}}/api/debug/db/games/{{gameId}}
+Content-Type: application/json
+
+###
+# ========================================
+# GAME STATUS & MAP ENDPOINTS
+# ========================================
+
+###
+# Get Game Status
+GET {{serverUrl}}/game/{{gameId}}/status
+Content-Type: application/json
+
+###
+# Get Map State
+GET {{serverUrl}}/game/{{gameId}}/map
+Content-Type: application/json
+
+###
+# Get All Players
+GET {{serverUrl}}/game/{{gameId}}/players
+Content-Type: application/json
+
+###
+# ========================================
+# PLAYER ACTION ENDPOINTS
+# ========================================
+
+###
+# Player 1 - Move North
+POST {{serverUrl}}/game/{{gameId}}/player/{{player1Id}}/move
+Content-Type: application/json
+
+{
+  "direction": "north"
+}
+
+###
+# Player 1 - Move South
+POST {{serverUrl}}/game/{{gameId}}/player/{{player1Id}}/move
+Content-Type: application/json
+
+{
+  "direction": "south"
+}
+
+###
+# Player 1 - Move East
+POST {{serverUrl}}/game/{{gameId}}/player/{{player1Id}}/move
+Content-Type: application/json
+
+{
+  "direction": "east"
+}
+
+###
+# Player 1 - Move West
+POST {{serverUrl}}/game/{{gameId}}/player/{{player1Id}}/move
+Content-Type: application/json
+
+{
+  "direction": "west"
+}
+
+###
+# Player 2 - Move North
+POST {{serverUrl}}/game/{{gameId}}/player/{{player2Id}}/move
+Content-Type: application/json
+
+{
+  "direction": "north"
+}
+
+###
+# Player 2 - Move West
+POST {{serverUrl}}/game/{{gameId}}/player/{{player2Id}}/move
+Content-Type: application/json
+
+{
+  "direction": "west"
+}
+
+###
+# ========================================
+# TRAP ACTIONS
+# ========================================
+
+###
+# Player 1 - Place Trap at Current Position
+POST {{serverUrl}}/game/{{gameId}}/player/{{player1Id}}/trap
+Content-Type: application/json
+
+{
+  "danger": 30
+}
+
+###
+# Player 1 - Place High Danger Trap
+POST {{serverUrl}}/game/{{gameId}}/player/{{player1Id}}/trap
+Content-Type: application/json
+
+{
+  "danger": 50
+}
+
+###
+# Player 2 - Place Trap
+POST {{serverUrl}}/game/{{gameId}}/player/{{player2Id}}/trap
+Content-Type: application/json
+
+{
+  "danger": 40
+}
+
+###
+# ========================================
+# REST & ENERGY ACTIONS
+# ========================================
+
+###
+# Player 1 - Rest to Restore Energy
+POST {{serverUrl}}/game/{{gameId}}/player/{{player1Id}}/rest
+Content-Type: application/json
+
+###
+# Player 2 - Rest to Restore Energy
+POST {{serverUrl}}/game/{{gameId}}/player/{{player2Id}}/rest
+Content-Type: application/json
+
+###
+# ========================================
+# TREASURE ACTIONS
+# ========================================
+
+###
+# Player 1 - Pick Up Treasure
+POST {{serverUrl}}/game/{{gameId}}/player/{{player1Id}}/pick-treasure
+Content-Type: application/json
+
+###
+# Player 1 - Drop Treasure
+POST {{serverUrl}}/game/{{gameId}}/player/{{player1Id}}/drop-treasure
+Content-Type: application/json
+
+###
+# Player 2 - Pick Up Treasure
+POST {{serverUrl}}/game/{{gameId}}/player/{{player2Id}}/pick-treasure
+Content-Type: application/json
+
+###
+# Player 2 - Drop Treasure
+POST {{serverUrl}}/game/{{gameId}}/player/{{player2Id}}/drop-treasure
+Content-Type: application/json
+
+###
+# ========================================
+# GAME HISTORY & LEADERBOARD
+# ========================================
+
+###
+# Get Game History
+GET {{serverUrl}}/game/{{gameId}}/history
+Content-Type: application/json
+
+###
+# Get Leaderboard
+GET {{serverUrl}}/game/{{gameId}}/leaderboard
+Content-Type: application/json
+
+###
+# Get Final Result
+GET {{serverUrl}}/game/{{gameId}}/result
+Content-Type: application/json
+
+###
+# ========================================
+# SEQUENCE TEST - Complex Player Actions
+# ========================================
+
+###
+# SCENARIO 1: Player explores and collects treasure
+# Step 1: Move to treasure location
+POST {{serverUrl}}/game/{{gameId}}/player/{{player1Id}}/move
+Content-Type: application/json
+
+{
+  "direction": "east"
+}
+
+###
+# Step 2: Move again
+POST {{serverUrl}}/game/{{gameId}}/player/{{player1Id}}/move
+Content-Type: application/json
+
+{
+  "direction": "east"
+}
+
+###
+# Step 3: Pick up treasure
+POST {{serverUrl}}/game/{{gameId}}/player/{{player1Id}}/pick-treasure
+Content-Type: application/json
+
+###
+# Step 4: Check map state after treasure pickup
+GET {{serverUrl}}/game/{{gameId}}/map
+Content-Type: application/json
+
+###
+# Step 5: Move back to base
+POST {{serverUrl}}/game/{{gameId}}/player/{{player1Id}}/move
+Content-Type: application/json
+
+{
+  "direction": "west"
+}
+
+###
+# Step 6: Drop treasure at base
+POST {{serverUrl}}/game/{{gameId}}/player/{{player1Id}}/drop-treasure
+Content-Type: application/json
+
+###
+# Step 7: Check leaderboard after scoring
+GET {{serverUrl}}/game/{{gameId}}/leaderboard
+Content-Type: application/json
+
+###
+# ========================================
+# SCENARIO 2: Player sets trap and rests
+# ========================================
+
+###
+# Step 1: Move to strategic position
+POST {{serverUrl}}/game/{{gameId}}/player/{{player2Id}}/move
+Content-Type: application/json
+
+{
+  "direction": "west"
+}
+
+###
+# Step 2: Place trap
+POST {{serverUrl}}/game/{{gameId}}/player/{{player2Id}}/trap
+Content-Type: application/json
+
+{
+  "danger": 45
+}
+
+###
+# Step 3: Rest to recover energy
+POST {{serverUrl}}/game/{{gameId}}/player/{{player2Id}}/rest
+Content-Type: application/json
+
+###
+# Step 4: Check player status
+GET {{serverUrl}}/game/{{gameId}}/players
+Content-Type: application/json
+
+###
+# ========================================
+# ERROR CASES
+# ========================================
+
+###
+# Error - Invalid Direction
+POST {{serverUrl}}/game/{{gameId}}/player/{{player1Id}}/move
+Content-Type: application/json
+
+{
+  "direction": "invalid-direction"
+}
+
+###
+# Error - Non-existent Game
+GET {{serverUrl}}/game/non-existent-game/status
+Content-Type: application/json
+
+###
+# Error - Non-existent Player
+POST {{serverUrl}}/game/{{gameId}}/player/non-existent-player/move
+Content-Type: application/json
+
+{
+  "direction": "north"
+}
+
+###
+# Error - Trap with Invalid Danger Value (negative)
+POST {{serverUrl}}/game/{{gameId}}/player/{{player1Id}}/trap
+Content-Type: application/json
+
+{
+  "danger": -10
+}
+
+###
+# Error - Trap with Danger Exceeding Max
+POST {{serverUrl}}/game/{{gameId}}/player/{{player1Id}}/trap
+Content-Type: application/json
+
+{
+  "danger": 999
+}
+
+###
+# Error - Move without direction
+POST {{serverUrl}}/game/{{gameId}}/player/{{player1Id}}/move
+Content-Type: application/json
+
+{}
+
+###
+# ========================================
+# MULTI-PLAYER SCENARIO
+# ========================================
+
+###
+# Define variables for multi-player game
+@multiGameId = game-test-002
+@team1Player1 = player1
+@team1Player2 = player2
+@team2Player1 = player3
+@team2Player2 = player4
+
+###
+# Team 1 Player 1 - Move East
+POST {{serverUrl}}/game/{{multiGameId}}/player/{{team1Player1}}/move
+Content-Type: application/json
+
+{
+  "direction": "east"
+}
+
+###
+# Team 1 Player 2 - Move South
+POST {{serverUrl}}/game/{{multiGameId}}/player/{{team1Player2}}/move
+Content-Type: application/json
+
+{
+  "direction": "south"
+}
+
+###
+# Team 2 Player 1 - Move West
+POST {{serverUrl}}/game/{{multiGameId}}/player/{{team2Player1}}/move
+Content-Type: application/json
+
+{
+  "direction": "west"
+}
+
+###
+# Team 2 Player 2 - Move North
+POST {{serverUrl}}/game/{{multiGameId}}/player/{{team2Player2}}/move
+Content-Type: application/json
+
+{
+  "direction": "north"
+}
+
+###
+# Team 1 Player 1 - Set Trap
+POST {{serverUrl}}/game/{{multiGameId}}/player/{{team1Player1}}/trap
+Content-Type: application/json
+
+{
+  "danger": 35
+}
+
+###
+# Team 2 Player 1 - Set Trap
+POST {{serverUrl}}/game/{{multiGameId}}/player/{{team2Player1}}/trap
+Content-Type: application/json
+
+{
+  "danger": 40
+}
+
+###
+# Check Multi-game Map State
+GET {{serverUrl}}/game/{{multiGameId}}/map
+Content-Type: application/json
+
+###
+# Check Multi-game Players
+GET {{serverUrl}}/game/{{multiGameId}}/players
+Content-Type: application/json
+
+###
+# Check Multi-game Leaderboard
+GET {{serverUrl}}/game/{{multiGameId}}/leaderboard
+Content-Type: application/json

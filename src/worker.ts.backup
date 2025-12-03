@@ -1,0 +1,168 @@
+import 'dotenv/config';
+import { connectDB } from './core/db';
+import { initializeGame, startGame, stopGame, getGameState } from './core/gameLoop';
+import { io } from './socket';
+
+const WORKER_PORT = parseInt(process.env.WORKER_PORT || '3001');
+
+// Quản lý các game đang chạy
+const activeGameIds = new Set<string>();
+
+/**
+ * Worker cho game loop - chạy trên process riêng
+ * Nhận lệnh từ API server qua Redis/Message Queue hoặc HTTP
+ */
+const startWorker = async () => {
+  try {
+    await connectDB();
+    
+    console.log('🎮 Game Loop Worker started');
+    console.log(`📊 Monitoring games...`);
+
+    // Lắng nghe các lệnh từ API server (có thể qua HTTP hoặc message queue)
+    setupWorkerAPI();
+
+    // Heartbeat để kiểm tra worker còn sống
+    setInterval(() => {
+      console.log(`💓 Worker heartbeat - Active games: ${activeGameIds.size}`);
+    }, 30000);
+
+  } catch (error) {
+    console.error('Failed to start game loop worker:', error);
+    process.exit(1);
+  }
+};
+
+/**
+ * Setup API đơn giản để nhận lệnh từ API server
+ */
+const setupWorkerAPI = () => {
+  const express = require('express');
+  const app = express();
+  
+  app.use(express.json());
+
+  // Health check
+  app.get('/health', (req: any, res: any) => {
+    res.json({ 
+      status: 'OK', 
+      service: 'Game Loop Worker',
+      activeGames: activeGameIds.size 
+    });
+  });
+
+  // Lấy danh sách tất cả games
+  app.get('/games', async (req: any, res: any) => {
+    try {
+      const { getAllGames } = require('./core/gameLoop');
+      
+      // Lấy tất cả games từ DB (getAllGames đã query DB)
+      const games = await getAllGames();
+      
+      res.json({ 
+        games, 
+        total: games.length
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Khởi tạo game mới
+  app.post('/game/init', async (req: any, res: any) => {
+    try {
+      const { gameId, mapData, players } = req.body;
+      
+      if (!gameId || !mapData || !players) {
+        return res.status(400).json({ error: 'Missing required fields' });
+      }
+
+      const { initializeGame } = require('./core/gameLoop');
+      await initializeGame(gameId, mapData, players);
+      activeGameIds.add(gameId);
+      
+      console.log(`🎮 Game ${gameId} initialized`);
+      res.json({ success: true, gameId });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Bắt đầu game
+  app.post('/game/:gameId/start', async (req: any, res: any) => {
+    try {
+      const { gameId } = req.params;
+      
+      const { startGame } = require('./core/gameLoop');
+      await startGame(gameId);
+      activeGameIds.add(gameId);
+      
+      console.log(`▶️  Game ${gameId} started`);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Dừng game
+  app.post('/game/:gameId/stop', async (req: any, res: any) => {
+    try {
+      const { gameId } = req.params;
+      
+      const { stopGame } = require('./core/gameLoop');
+      await stopGame(gameId);
+      activeGameIds.delete(gameId);
+      
+      console.log(`⏹️  Game ${gameId} stopped`);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Lấy trạng thái game
+  app.get('/game/:gameId/state', async (req: any, res: any) => {
+    try {
+      const { gameId } = req.params;
+      const { getGameState } = require('./core/gameLoop');
+      const gameState = await getGameState(gameId);
+      
+      if (!gameState) {
+        return res.status(404).json({ error: 'Game not found' });
+      }
+
+      res.json({ gameState });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.listen(WORKER_PORT, () => {
+    console.log(`🔧 Worker API listening on port ${WORKER_PORT}`);
+  });
+};
+
+startWorker();
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received, shutting down worker...');
+  
+  // Dừng tất cả game đang chạy
+  activeGameIds.forEach(gameId => {
+    stopGame(gameId);
+  });
+  
+  console.log('Worker shutdown complete');
+  process.exit(0);
+});
+
+process.on('SIGINT', () => {
+  console.log('SIGINT received, shutting down worker...');
+  
+  activeGameIds.forEach(gameId => {
+    stopGame(gameId);
+  });
+  
+  process.exit(0);
+});

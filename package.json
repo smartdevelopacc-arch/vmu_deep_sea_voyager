@@ -1,0 +1,59 @@
+{
+  "name": "deep_sea_voyager",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "build:dashboard": "cd dashboard && npm run build",
+    "build:all": "npm run build && npm run build:dashboard",
+    "start:api": "node -r tsconfig-paths/register dist/index.js",
+    "start:dashboard": "cd dashboard && npm run preview",
+    "start": "npm run build:all && concurrently \"npm:start:api\" \"npm:start:dashboard\"",
+    "dev:api": "ts-node-dev --respawn --transpile-only -r tsconfig-paths/register src/index.ts",
+    "dev:dashboard": "cd dashboard && npm run dev",
+    "dev": "concurrently \"npm:dev:api\" \"npm:dev:dashboard\"",
+    "start:server": "node -r tsconfig-paths/register dist/index.js",
+    "dev:server": "ts-node-dev --respawn --transpile-only -r tsconfig-paths/register src/index.ts",
+    "cli": "ts-node -r tsconfig-paths/register src/scripts/cli.ts",
+    "test": "jest",
+    "test:file": "jest -- "
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/duc-nguyentrung/deep_sea_voyager.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/duc-nguyentrung/deep_sea_voyager/issues"
+  },
+  "homepage": "https://github.com/duc-nguyentrung/deep_sea_voyager#readme",
+  "dependencies": {
+    "axios": "^1.13.2",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "mongoose": "^8.19.2",
+    "socket.io": "^4.8.1",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.5",
+    "@types/jest": "^30.0.0",
+    "@types/mongoose": "^5.11.96",
+    "@types/node": "^24.9.2",
+    "@types/socket.io": "^3.0.1",
+    "@types/socket.io-client": "^1.4.36",
+    "concurrently": "^9.2.1",
+    "jest": "^30.2.0",
+    "mongodb-memory-server": "^10.3.0",
+    "nodemon": "^3.1.10",
+    "socket.io-client": "^4.8.1",
+    "ts-jest": "^29.4.5",
+    "ts-node": "^10.9.2",
+    "ts-node-dev": "^2.0.0",
+    "tsconfig-paths": "^4.2.0",
+    "typescript": "^5.9.3"
+  }
+}

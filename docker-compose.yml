@@ -1,0 +1,42 @@
+services:
+  mongo:
+    image: mongo:latest
+    container_name: deep_sea_voyager_db
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db # Để dữ liệu được duy trì
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: user
+      MONGO_INITDB_ROOT_PASSWORD: aSecret!Password
+    restart: always
+
+  api:
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile
+    container_name: deep_sea_voyager_api
+    ports:
+      - "3000:3000" # API server port
+      - "3001:3001" # Worker port
+    depends_on:
+      - mongo # Đảm bảo mongo chạy trước api
+    volumes:
+      - .:/usr/src/app # Volume mapping cho dev, tự động cập nhật code
+      - /usr/src/app/node_modules # Loại trừ node_modules khỏi volume mapping
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      WORKER_PORT: 3001
+      # Chuỗi kết nối, sử dụng tên service `mongo` làm host
+      MONGO_URI: mongodb://user:aSecret%21Password@mongo:27017/deep_sea_voyager_db?authSource=admin
+      GAME_TICK_INTERVAL: 500
+      GAME_MAX_TURNS: 1200
+      GAME_MAX_ENERGY: 100
+      GAME_ENERGY_RESTORE: 10
+      GAME_MAX_TRAPS_PER_PLAYER: 5
+      GAME_MAX_TRAP_DANGER: 50
+    command: npm run start # Sử dụng ts-node để chạy dev
+
+volumes:
+  mongodb_data:
