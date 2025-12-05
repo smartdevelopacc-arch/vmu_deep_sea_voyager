@@ -47,6 +47,13 @@ export const emitTrapPlaced = (gameId: string, playerId: string, position: { x: 
 };
 
 /**
+ * Phát sự kiện gỡ bỏ bẫy (do bị dẫm hoặc bị đẩy ra vì vượt giới hạn)
+ */
+export const emitTrapRemoved = (gameId: string, position: { x: number, y: number }) => {
+    io.to(`game:${gameId}`).emit('trap:removed', { gameId, position });
+};
+
+/**
  * Phát sự kiện va chạm
  */
 export const emitCollision = (gameId: string, attackerId: string, victimId: string, energyLoss?: number) => {
@@ -65,6 +72,13 @@ export const emitScoreUpdate = (gameId: string, playerId: string, score: number)
  */
 export const emitTreasureDropped = (gameId: string, playerId: string) => {
     io.to(`game:${gameId}`).emit('treasure:dropped', { gameId, playerId });
+};
+
+/**
+ * Phát sự kiện cập nhật treasure status player (khi mất treasure do collision hoặc drop)
+ */
+export const emitPlayerTreasureUpdate = (gameId: string, playerId: string, carriedTreasure: number) => {
+    io.to(`game:${gameId}`).emit('player:treasure:changed', { gameId, playerId, carriedTreasure });
 };
 
 /**

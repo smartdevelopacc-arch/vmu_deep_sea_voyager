@@ -33,7 +33,7 @@
             <tr v-for="(row, idx) in finishedLeaderboard" :key="row.playerId">
               <td>{{ idx + 1 }}</td>
               <td>
-                <span class="player-badge" :style="{ backgroundColor: getPlayerColor(idx) }">
+                <span class="player-badge" :style="{ backgroundColor: getPlayerColor(row) }">
                   {{ row.name || row.code || row.playerId }}
                 </span>
               </td>
@@ -61,15 +61,53 @@
           <!-- Sponsors Section -->
           <div class="sponsors-section">
             <h3>Sponsors</h3>
-            <div class="ad-slot">
-              <img src="https://via.placeholder.com/250x250/3b82f6/ffffff?text=Ad+Space" alt="Advertisement" />
+            <div class="sponsors-grid">
+              <div class="ad-slot">
+                <img src="/dashboard/sponsors/vmu.png" alt="Advertisement" />
+              </div>
+              <div class="ad-slot">
+                <img src="/dashboard/sponsors/lg.png" alt="Advertisement" />
+              </div>
+              <div class="ad-slot">
+                <img src="/dashboard/sponsors/fit.png" alt="Advertisement" />
+              </div>
             </div>
-            <div class="ad-slot">
-              <img src="https://via.placeholder.com/250x250/22c55e/ffffff?text=Your+Logo" alt="Advertisement" />
-            </div>
-            <div class="ad-slot">
-              <img src="https://via.placeholder.com/250x250/a855f7/ffffff?text=Sponsor" alt="Advertisement" />
-            </div>
+          </div>
+
+
+          <div class="players-section" v-if="currentGame.players">
+            <h2>Leaderboard</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>Team</th>
+                  <th>Energy</th>
+                  <th>Score</th>
+                  <th>Traps</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="player in sortedPlayers" 
+                    :key="player.code"
+                    :class="{ 'score-updated': recentScoreUpdates.includes(player.code) }"
+                    class="player-row">
+                  <td>
+                    <span class="player-badge" :style="{ backgroundColor: getPlayerColor(player) }">
+                      {{ player.teamName || player.name || player.code }}
+                    </span>
+                  </td>
+                  <td>
+                    <div class="energy-bar-container">
+                      <div class="energy-bar" :style="getEnergyBarStyle(player.energy)">
+                        <span class="energy-text">{{ player.energy }}</span>
+                      </div>
+                    </div>
+                  </td>
+                  <td class="score-cell">{{ player.score || 0 }}</td>
+                  <td>{{ player.trapCount || 0 }}/{{ MAX_TRAPS }}</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
 
           <div class="info-grid">
@@ -95,35 +133,6 @@
         </div>
           </div>
 
-          <div class="players-section" v-if="currentGame.players">
-            <h2>Leaderboard</h2>
-            <table>
-              <thead>
-                <tr>
-                  <th>Team</th>
-                  <th>Energy</th>
-                  <th>Score</th>
-                  <th>Traps</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="(player, index) in sortedPlayers" 
-                    :key="player.code"
-                    :class="{ 'score-updated': recentScoreUpdates.includes(player.code) }"
-                    class="player-row">
-                  <td>
-                    <span class="player-badge" :style="{ backgroundColor: getPlayerColor(index) }">
-                      {{ player.teamName || player.name || player.code }}
-                    </span>
-                  </td>
-                  <td>{{ player.energy }}</td>
-                  <td class="score-cell">{{ player.score || 0 }}</td>
-                  <td>{{ player.trapCount || 0 }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
           <div class="socket-status">
             <h3>Real-time Updates</h3>
             <p :class="{ 'connected': socketConnected, 'disconnected': !socketConnected }">
@@ -138,7 +147,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useGameStore } from '../stores/game'
 import { usePlayerStore } from '../stores/players'
@@ -214,9 +223,40 @@ const { socket, connected: socketConnected } = useGameSocket(gameId, gameStore, 
 // Player colors: Đỏ, Xanh lá, Xanh nước biển, Tím
 const PLAYER_COLORS = ['#ef4444', '#22c55e', '#3b82f6', '#a855f7']
 
-const getPlayerColor = (index: number): string => {
+const getPlayerColor = (player: any): string => {
+  // Use originalIndex to maintain consistent colors even when sorted
+  const index = player.originalIndex ?? 0
   return PLAYER_COLORS[index % PLAYER_COLORS.length]!
 }
+
+// ✅ ENHANCED: Get energy bar color gradient (red -> yellow -> green)
+const getEnergyColor = (energy: number, maxEnergy: number = 100): string => {
+  const percentage = Math.min(100, Math.max(0, (energy / maxEnergy) * 100))
+  
+  if (percentage < 33) {
+    // Đỏ (0-33%)
+    return '#ef4444'
+  } else if (percentage < 66) {
+    // Vàng (33-66%)
+    return '#eab308'
+  } else {
+    // Xanh lá (66-100%)
+    return '#22c55e'
+  }
+}
+
+const getEnergyBarStyle = (energy: number, maxEnergy: number = 100): any => {
+  const percentage = Math.min(100, Math.max(0, (energy / maxEnergy) * 100))
+  const color = getEnergyColor(energy, maxEnergy)
+  
+  return {
+    width: `${percentage}%`,
+    backgroundColor: color,
+    transition: 'all 0.3s ease'
+  }
+}
+
+const MAX_TRAPS = 5 // Matching backend MAX_TRAPS_PER_PLAYER
 
 const sortedPlayers = computed(() => {
   if (!currentGame.value?.players) return []
@@ -230,24 +270,24 @@ const sortedPlayers = computed(() => {
   }
   
   const result = [...currentGame.value.players]
-    .map((p: any) => {
+    .map((p: any, originalIndex: number) => {
       // Try to find global player info by playerId or code
       const globalPlayer = playersById[p.playerId] || playersByCode[p.code]
       
+      // ✅ ENHANCED: Prefer code as display name for leaderboard
+      const displayName = p.code || p.teamName || globalPlayer?.teamName || globalPlayer?.name || p.name || p.playerId
+      
       const enriched = {
         ...p,
-        // Enrich with teamName from global store
-        teamName: p.teamName || globalPlayer?.teamName || globalPlayer?.name || p.name,
-        name: p.name || globalPlayer?.name || p.code
+        // ✅ ENHANCED: Preserve original index for consistent color assignment
+        originalIndex,
+        // Use code as primary display (team identifier)
+        teamName: p.code,
+        // Keep original name for detail
+        name: p.name || globalPlayer?.name || displayName,
+        // Ensure code is always present
+        code: p.code || p.playerId
       }
-      
-      // Debug log
-      console.log('🎮 Player enriched:', {
-        original: p,
-        globalPlayer,
-        enriched,
-        displayName: enriched.teamName || enriched.name || enriched.code
-      })
       
       return enriched
     })
@@ -262,8 +302,10 @@ const finishedLeaderboard = computed(() => {
   if (finalScores.length) {
     // Enrich with player code if available
     const playersById: Record<string, any> = {}
-    for (const p of currentGame.value?.players || []) {
+    const playerOriginalIndex: Record<string, number> = {}
+    for (const [idx, p] of (currentGame.value?.players || []).entries()) {
       playersById[p.playerId] = p
+      playerOriginalIndex[p.playerId] = idx
     }
     // Also enrich from global players store (may have names/teamName)
     const globalByCode: Record<string, any> = {}
@@ -276,6 +318,7 @@ const finishedLeaderboard = computed(() => {
         playerId: s.playerId,
         score: s.score,
         code: playersById[s.playerId]?.code || s.playerId,
+        originalIndex: playerOriginalIndex[s.playerId] ?? 0,
         name:
           playersById[s.playerId]?.teamName ||
           playersById[s.playerId]?.name ||
@@ -291,10 +334,11 @@ const finishedLeaderboard = computed(() => {
     globalByCode[gp.code] = gp
   }
   return (currentGame.value?.players || [])
-    .map((p: any) => ({
+    .map((p: any, originalIndex: number) => ({
       playerId: p.playerId,
       score: p.score || 0,
       code: p.code,
+      originalIndex,
       name: p.teamName || p.name || globalByCode[p.code]?.teamName || globalByCode[p.code]?.name
     }))
     .sort((a: any, b: any) => b.score - a.score)
@@ -360,6 +404,16 @@ const handleReset = async () => {
 
 onMounted(() => {
   fetchState()
+  
+  // Sync isActive with game status when it changes to finished
+  watch(() => currentGame.value?.status, (newStatus) => {
+    if (newStatus === 'finished') {
+      isActive.value = false
+      stopCountdown()
+      console.log('🏁 Game status changed to finished, stopping countdown and disabling active state')
+    }
+  })
+  
   // Attach tick complete listener to refresh full state
   tickListener = (data: any) => {
     if (!data || data.gameId !== gameId) return
@@ -372,13 +426,21 @@ onMounted(() => {
   }
   socket.value?.on('game:tick:complete', tickListener)
   
-  // Watch for score changes to trigger animation
-  socket.value?.on('player:score:updated', (data: any) => {
-    if (data?.playerCode) {
-      recentScoreUpdates.value.push(data.playerCode)
+  // ✅ ENHANCED: Watch for score changes to trigger animation (uses correct event name)
+  socket.value?.on('player:score:changed', (data: any) => {
+    if (data?.playerId) {
+      // Find player code from playerId
+      const player = currentGame.value?.players?.find((p: any) => 
+        p.playerId === data.playerId || p.code === data.playerId
+      )
+      const playerCode = player?.code || data.playerId
+      
+      recentScoreUpdates.value.push(playerCode)
+      lastUpdate.value = new Date().toLocaleTimeString()
+      
       // Remove after animation
       setTimeout(() => {
-        const idx = recentScoreUpdates.value.indexOf(data.playerCode)
+        const idx = recentScoreUpdates.value.indexOf(playerCode)
         if (idx > -1) {
           recentScoreUpdates.value.splice(idx, 1)
         }
@@ -580,14 +642,34 @@ onUnmounted(() => {
   flex: 1;
   min-width: 0;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
+  justify-content: center;
   max-height: 95vh;
+  position: relative;
+}
+
+/* Keep map area square by constraining to the smaller of available width/height */
+.map-section::before {
+  content: '';
+  display: block;
+  padding-top: 100%;
+  width: 100%;
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.map-section > * {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: min(100%, 100vh);
+  height: min(100%, 100vh);
 }
 
 .info-sidebar {
   flex: 0 0 auto;
-  min-width: 200px;
-  max-width: 250px;
+  min-width: 250px;
+  max-width: 320px;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -611,16 +693,29 @@ onUnmounted(() => {
 }
 
 .ad-slot {
+  position: relative;
   background: white;
   border-radius: 6px;
   overflow: hidden;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  width: 100%;
+  padding-top: 100%; /* square ratio */
 }
 
 .ad-slot img {
+  position: absolute;
+  inset: 0;
   width: 100%;
-  height: auto;
+  height: 100%;
+  object-fit: contain;
   display: block;
+  padding: 10px
+}
+
+.sponsors-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(90px, 1fr));
+  gap: 8px;
 }
 
 .info-grid {
@@ -649,8 +744,7 @@ onUnmounted(() => {
 
 table {
   width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
+  border-collapse: collapse;
   margin-top: 10px;
   font-size: 12px;
   background: white;
@@ -659,9 +753,10 @@ table {
 }
 
 th, td {
-  padding: 8px 6px;
+  padding: 10px 8px;
   text-align: left;
   border-bottom: 1px solid #e5e7eb;
+  vertical-align: middle;
 }
 
 th {
@@ -681,9 +776,46 @@ tr:last-child td {
   border-bottom: none;
 }
 
+/* ✅ ENHANCED: Energy bar styling */
+.energy-bar-container {
+  width: 100%;
+  height: 24px;
+  background: #e5e7eb;
+  border-radius: 4px;
+  overflow: hidden;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.1);
+}
+
+.energy-bar {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  min-width: 24px;
+}
+
+.energy-text {
+  color: white;
+  font-weight: bold;
+  font-size: 11px;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+  user-select: none;
+}tr {
+  margin: 0;
+  padding: 0;
+}
+
+tbody tr {
+  border-spacing: 0;
+}
+
 .player-badge {
   display: inline-block;
-  padding: 4px 8px;
+  width: 100px;
+  min-height: 28px;
+  padding: 6px 10px;
   border-radius: 12px;
   color: white;
   font-weight: bold;
@@ -691,6 +823,14 @@ tr:last-child td {
   box-shadow: 0 2px 4px rgba(0,0,0,0.2);
   text-transform: uppercase;
   letter-spacing: 0.3px;
+  white-space: normal;
+  word-wrap: break-word;
+  line-height: 1.3;
+  text-align: center;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .score-cell {

@@ -37,16 +37,20 @@
         </div>
         
         <div class="toolbar-section" v-if="selectedTool === 'base'">
-          <label>Player Index:</label>
+          <label>Player:</label>
           <select v-model.number="selectedPlayerIndex" class="tool-select">
-            <option v-for="i in maxPlayers" :key="i" :value="i-1">Player {{ i }}</option>
+            <option v-for="i in maxPlayers" :key="i" :value="i-1">
+              {{ currentGame?.players?.[i-1]?.code || `Player ${i}` }} ({{ currentGame?.players?.[i-1]?.name || `Team ${i}` }})
+            </option>
           </select>
         </div>
         
         <div class="toolbar-section" v-if="selectedTool === 'trap'">
           <label>Player:</label>
           <select v-model.number="selectedPlayerIndex" class="tool-select">
-            <option v-for="i in maxPlayers" :key="i" :value="i-1">Player {{ i }}</option>
+            <option v-for="i in maxPlayers" :key="i" :value="i-1">
+              {{ currentGame?.players?.[i-1]?.code || `Player ${i}` }} ({{ currentGame?.players?.[i-1]?.name || `Team ${i}` }})
+            </option>
           </select>
           <label>Danger:</label>
           <input type="number" v-model.number="trapDanger" min="1" max="10" class="value-input" />
@@ -169,7 +173,7 @@ const maxPlayers = ref(4)
 
 const mapData = ref<any>(null)
 const editedMap = ref<any>(null)
-const currentGame = computed(() => gameStore.currentGame)
+const currentGame = computed(() => gameStore.currentGame) as any
 
 // Player colors matching MapViewer
 const PLAYER_COLORS = ['#ef4444', '#22c55e', '#3b82f6', '#a855f7']
@@ -309,6 +313,11 @@ const fetchMapData = async () => {
       editedMap.value.bases = []
     }
     
+    // ✅ FIX: Normalize bases to [[Number]] format (convert {x,y} to [x,y])
+    editedMap.value.bases = editedMap.value.bases.map((b: any) =>
+      Array.isArray(b) ? b : [b.x ?? 0, b.y ?? 0]
+    )
+    
     if (!editedMap.value.traps) {
       editedMap.value.traps = []
     }
@@ -345,10 +354,11 @@ const handleCellClick = (x: number, y: number) => {
       idx !== selectedPlayerIndex.value
     )
     // Add new base at selected position
+    // ✅ FIX: Use [x, y] format (array) not {x, y} (object) - schema requires [[Number]]
     while (editedMap.value.bases.length <= selectedPlayerIndex.value) {
-      editedMap.value.bases.push({ x: 0, y: 0 })
+      editedMap.value.bases.push([0, 0])
     }
-    editedMap.value.bases[selectedPlayerIndex.value] = { x, y }
+    editedMap.value.bases[selectedPlayerIndex.value] = [x, y]
   } else if (selectedTool.value === 'trap') {
     // Ensure traps array is initialized
     if (!editedMap.value.traps) {
@@ -408,15 +418,23 @@ const getCellClass = (x: number, y: number) => {
 }
 
 const getCellStyle = (x: number, y: number) => {
-  // Check if this is a base
+  // Check if this is a base - show with player color
   if (editedMap.value?.bases) {
-    const isBase = editedMap.value.bases.some((b: any) => {
+    const baseIndex = editedMap.value.bases.findIndex((b: any) => {
       const bx = Array.isArray(b) ? b[0] : b.x
       const by = Array.isArray(b) ? b[1] : b.y
       return bx === x && by === y
     })
-    if (isBase) {
-      return { backgroundColor: 'rgba(255, 215, 0, 0.3)' }
+    if (baseIndex >= 0) {
+      const playerColor = getPlayerColor(baseIndex)
+      // Convert hex to rgba with 0.5 opacity for better visibility
+      const r = parseInt(playerColor.slice(1, 3), 16)
+      const g = parseInt(playerColor.slice(3, 5), 16)
+      const b = parseInt(playerColor.slice(5, 7), 16)
+      return {
+        backgroundColor: `rgba(${r}, ${g}, ${b}, 0.5)`,
+        border: `2px solid ${playerColor}`
+      }
     }
   }
   
@@ -466,7 +484,12 @@ const getCellTitle = (x: number, y: number) => {
       const by = Array.isArray(b) ? b[1] : b.y
       return bx === x && by === y
     })
-    if (baseIndex >= 0) parts.push(`Base (Player ${baseIndex + 1})`)
+    if (baseIndex >= 0) {
+      // ✅ ENHANCED: Show player code from API if available
+      const playerCode = currentGame?.players?.[baseIndex]?.code || `Player ${baseIndex + 1}`
+      const playerName = currentGame?.players?.[baseIndex]?.name || `Team ${baseIndex + 1}`
+      parts.push(`Base (${playerCode} / ${playerName})`)
+    }
   }
   
   const wave = editedMap.value?.waves?.[y]?.[x]
@@ -488,22 +511,37 @@ const saveChanges = async () => {
   error.value = null
   
   try {
-    // Update map config via API
-    await apiClient.put(`/game/${gameId.value}/map`, {
+    // ✅ IMPROVED: Ensure bases are in correct [[Number]] format before sending
+    const basesToSave = editedMap.value.bases?.map((b: any) =>
+      Array.isArray(b) ? b : [b.x ?? 0, b.y ?? 0]
+    ) || []
+    
+    // Update map config via API (admin endpoint)
+    await apiClient.put(`/admin/game/${gameId.value}/map`, {
       terrain: editedMap.value.terrain,
       waves: editedMap.value.waves,
       treasures: editedMap.value.treasures,
-      bases: editedMap.value.bases,
+      bases: basesToSave,
       traps: editedMap.value.traps
     })
     
     // Refresh data
     await fetchMapData()
     
-    alert('Map changes saved successfully!')
+    alert('✅ Map changes saved successfully!')
   } catch (err: any) {
-    error.value = `Failed to save: ${err.message}`
-    alert(`Failed to save: ${err.message}`)
+    // ✅ IMPROVED: Extract error details from response or error object
+    let errorMsg = err.message || 'Unknown error'
+    if (err.response?.data?.error) {
+      errorMsg = err.response.data.error
+    } else if (err.response?.status === 400) {
+      errorMsg = `Invalid data: Check that bases are in format [[x,y], [x,y], ...] and game is not running`
+    } else if (err.response?.status === 404) {
+      errorMsg = `Game not found: ${gameId.value}`
+    }
+    
+    error.value = `Failed to save: ${errorMsg}`
+    alert(`❌ Failed to save map:\n\n${errorMsg}`)
     console.error('Failed to save map changes:', err)
   } finally {
     loading.value = false

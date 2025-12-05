@@ -11,18 +11,24 @@ const saveGameState = async (gameState) => {
         // Chuyển đổi Map thành Array để lưu vào MongoDB
         const playersArray = Array.from(gameState.players.values()).map((p, index) => ({
             code: p.playerId,
-            name: `Player ${p.playerId}`,
+            name: p.name || `Player ${p.playerId}`,
             playerId: p.playerId,
             position: p.position,
             energy: p.energy,
             score: p.score,
             carriedTreasure: p.carriedTreasure,
             trapCount: p.trapCount,
+            isAtBase: p.isAtBase,
             moveHistory: []
         }));
         console.log(`[DEBUG] Players array: ${playersArray.length} players`);
-        // Chuyển đổi traps Map thành array of [x, y, danger, playerId]
-        const trapsArray = Array.from(gameState.map.traps.values()).map((trap) => [trap.position?.x || 0, trap.position?.y || 0, trap.danger || 0, trap.playerId || '']);
+        // Chuyển đổi traps Map thành array of objects for storage
+        const trapsArray = Array.from(gameState.map.traps.values()).map((trap) => ({
+            position: trap.position || { x: 0, y: 0 },
+            danger: trap.danger || 0,
+            playerId: trap.playerId || '',
+            createdAt: trap.createdAt || Date.now()
+        }));
         console.log(`[DEBUG] 🪤 Traps to save: ${trapsArray.length} traps`);
         if (trapsArray.length > 0) {
             console.log(`[DEBUG] 🪤 First trap:`, trapsArray[0]);
@@ -110,9 +116,23 @@ const loadGameState = async (gameId) => {
         if (!game) {
             return null;
         }
+        // Tính trapCount từ traps thực tế trong runtimeState/map để tránh lệch so với DB
+        const trapCountByPlayer = new Map();
+        const trapSourceForCount = game.status === 'playing' && game.runtimeState?.traps
+            ? game.runtimeState.traps
+            : game.map?.traps || [];
+        if (trapSourceForCount) {
+            trapSourceForCount.forEach((trap) => {
+                const ownerId = Array.isArray(trap) ? trap[3] : trap?.playerId;
+                if (!ownerId)
+                    return;
+                trapCountByPlayer.set(ownerId, (trapCountByPlayer.get(ownerId) || 0) + 1);
+            });
+        }
         // Chuyển đổi từ MongoDB document sang in-memory state
         const players = new Map();
-        game.players.forEach((p) => {
+        const bases = game.map?.bases || [];
+        game.players.forEach((p, playerIndex) => {
             // Sử dụng 'code' từ DB schema, đó là playerId
             const playerId = p.code || p.playerId;
             // Tính score từ scores array hoặc từ player document
@@ -123,14 +143,30 @@ const loadGameState = async (gameId) => {
                     playerScore = scoreEntry.score || 0;
                 }
             }
+            // Force player về base CHỈ KHI game mới start (turn = 0)
+            let playerPosition = p.position;
+            let playerIsAtBase = p.isAtBase ?? false;
+            // CHỈ force về base nếu là lần đầu game start (currentTurn = 0)
+            if ((game.status === 'playing' || game.status === 'waiting') && game.currentTurn === 0) {
+                if (playerIndex < bases.length) {
+                    const basePos = bases[playerIndex];
+                    playerPosition = Array.isArray(basePos) ? { x: basePos[0], y: basePos[1] } : basePos;
+                    playerIsAtBase = true;
+                    console.log(`🏁 Game ${gameId} turn 0: Forcing player ${p.code} to base at (${playerPosition.x}, ${playerPosition.y})`);
+                }
+            }
             players.set(playerId, {
                 playerId: playerId,
-                position: p.position,
-                energy: p.energy,
+                code: p.code || playerId, // ✅ ENHANCED: Include code for leaderboard display
+                name: p.name || `Player ${p.code || playerId}`, // ✅ ENHANCED: Include name for UI
+                position: playerPosition,
+                energy: p.energy || 100,
                 carriedTreasure: p.carriedTreasure,
-                trapCount: p.trapCount,
+                trapCount: trapCountByPlayer.get(playerId) || p.trapCount || 0,
                 score: playerScore,
-                isAtBase: false
+                isAtBase: playerIsAtBase,
+                baseIndex: playerIndex // ✅ ENHANCED: Store base index for reliable base assignment
+                // NOTE: secret is NOT stored here - validated from global Player collection only
             });
         });
         // Ensure terrain and waves are properly initialized
@@ -156,7 +192,24 @@ const loadGameState = async (gameId) => {
         const trapSource = usesRuntimeState ? game.runtimeState.traps : game.map?.traps;
         if (trapSource) {
             trapSource.forEach((trap, index) => {
-                traps.set(`trap-${index}`, trap);
+                // Handle both object and array formats for backward compatibility
+                let trapObj;
+                if (Array.isArray(trap)) {
+                    // Old flat array format [x, y, danger, playerId, createdAt]
+                    trapObj = {
+                        position: { x: trap[0], y: trap[1] },
+                        danger: trap[2],
+                        playerId: trap[3],
+                        createdAt: trap[4] || Date.now()
+                    };
+                }
+                else {
+                    // Object format - use as-is
+                    trapObj = trap;
+                }
+                // Use position coordinates as key for quick access
+                const key = trapObj.position ? `${trapObj.position.x},${trapObj.position.y}` : `trap-${index}`;
+                traps.set(key, trapObj);
             });
         }
         if (usesRuntimeState) {

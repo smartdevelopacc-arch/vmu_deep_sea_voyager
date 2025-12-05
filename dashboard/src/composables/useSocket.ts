@@ -105,9 +105,29 @@ export function useGameSocket(gameId: string, store: any, onAnyEvent?: (evt: any
       }
     })
 
+    socket.value.on('player:treasure:changed', (data) => {
+      if (data?.gameId === gameId) {
+        const player = store.currentGame?.players?.find((p: any) => 
+          p.playerId === data.playerId || p.code === data.playerId
+        )
+        if (player) {
+          player.carriedTreasure = data.carriedTreasure || 0
+          console.log(`💎 Player ${data.playerId} treasure updated to: ${data.carriedTreasure}`)
+        }
+        onAnyEvent?.(data)
+      }
+    })
+
     socket.value.on('trap:placed', (data) => {
       if (data?.gameId === gameId) {
         store.addTrap(data.playerId, data.position, data.danger)
+        onAnyEvent?.(data)
+      }
+    })
+
+    socket.value.on('trap:removed', (data) => {
+      if (data?.gameId === gameId && data.position) {
+        store.removeTrap(data.position)
         onAnyEvent?.(data)
       }
     })

@@ -1,11 +1,25 @@
 import axios from 'axios'
 
+// ✅ NEW: Get API key from environment variable
+const apiKey = import.meta.env.VITE_API_KEY || '';
+
 const apiClient = axios.create({
   baseURL: '/api',
   headers: {
     'Content-Type': 'application/json'
   }
 })
+
+// ✅ NEW: Add interceptor to include API key for admin endpoints
+apiClient.interceptors.request.use((config) => {
+  // Add API key header for admin and player management endpoints
+  if (config.url?.includes('/admin/') || config.url?.includes('/players/')) {
+    config.headers['x-api-key'] = apiKey;
+  }
+  return config;
+}, (error) => {
+  return Promise.reject(error);
+});
 
 // Admin API endpoints
 export const adminAPI = {

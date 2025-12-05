@@ -3,17 +3,31 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.getMap = exports.getGameConfig = void 0;
 const game_model_1 = require("../models/game.model");
 /**
- * GET /game/:gameId/config
+ * GET /game/:gameId/config?playerId=xxx
  * Returns static game configuration that never changes
+ * ✅ ENHANCED: Only returns traps belonging to the requesting player
  */
 const getGameConfig = async (req, res) => {
     try {
         const { gameId } = req.params;
+        const { playerId } = req.query; // Get playerId from query parameter
         const game = await game_model_1.GameModel.findOne({ code: gameId });
         if (!game) {
             return res.status(404).json({ error: 'Game not found' });
         }
         // Static configuration only
+        // ✅ ENHANCED: Include player info with bases for editor
+        const basesWithPlayers = game.map.bases?.map((base, index) => ({
+            position: Array.isArray(base) ? { x: base[0], y: base[1] } : base,
+            playerIndex: index,
+            playerCode: game.players?.[index]?.code || `player_${index}`,
+            playerName: game.players?.[index]?.name || `Player ${index + 1}`
+        })) || [];
+        // ✅ ENHANCED: Only return traps belonging to the requesting player
+        const allTraps = game.runtimeState?.traps || [];
+        const playerTraps = Array.isArray(allTraps)
+            ? allTraps.filter((trap) => trap.playerId === playerId || trap[3] === playerId)
+            : Object.values(allTraps).filter((trap) => trap.playerId === playerId);
         res.json({
             width: game.map.width,
             height: game.map.height,
@@ -21,7 +35,8 @@ const getGameConfig = async (req, res) => {
             waves: game.map.waves,
             treasures: game.map.treasures,
             bases: game.map.bases,
-            traps: game.runtimeState?.traps || [],
+            basesWithPlayers,
+            traps: playerTraps,
             settings: {
                 enableTraps: game.settings?.enableTraps ?? true,
                 maxTurns: game.settings?.maxTurns,

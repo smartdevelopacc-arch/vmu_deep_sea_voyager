@@ -4,7 +4,7 @@ import { defaultJSONTransform } from './model-utils';
 export interface IPlayerAction extends Document {
   gameId: string;
   playerId: string;
-  actionType: 'move' | 'trap' | 'rest' | 'pick-treasure' | 'drop-treasure';
+  actionType: 'move' | 'trap' | 'rest';
   data?: any;
   status: 'pending' | 'processed' | 'failed';
   timestamp: Date;
@@ -18,7 +18,7 @@ const PlayerActionSchema = new Schema<IPlayerAction>({
   actionType: { 
     type: String, 
     required: true,
-    enum: ['move', 'trap', 'rest', 'pick-treasure', 'drop-treasure']
+    enum: ['move', 'trap', 'rest']
   },
   data: { type: Schema.Types.Mixed },
   status: { 

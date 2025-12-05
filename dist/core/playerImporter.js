@@ -7,6 +7,20 @@ exports.validatePlayerCodes = exports.getAvailablePlayers = exports.importPlayer
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 const player_model_1 = require("../models/player.model");
+const crypto_1 = __importDefault(require("crypto"));
+/**
+ * Generate a secure random secret for player authentication
+ * 5 characters: uppercase letters and numbers
+ */
+const generatePlayerSecret = () => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let result = '';
+    const randomBytes = crypto_1.default.randomBytes(5);
+    for (let i = 0; i < 5; i++) {
+        result += chars[randomBytes[i] % chars.length];
+    }
+    return result;
+};
 /**
  * Import players từ thư mục assets/players/ vào MongoDB
  * Mỗi player là một file: assets/players/<player_code>.json
@@ -26,16 +40,20 @@ const importPlayers = async () => {
         const filePath = path_1.default.join(playersDir, file);
         try {
             const info = JSON.parse(fs_1.default.readFileSync(filePath, 'utf-8'));
+            // ✅ NEW: Generate or retrieve existing secret
+            const existingPlayer = await player_model_1.Player.findOne({ code: playerCode });
+            const secret = existingPlayer?.secret || generatePlayerSecret();
             // Upsert player vào database
             await player_model_1.Player.findOneAndUpdate({ code: playerCode }, {
                 code: playerCode,
                 name: info.name,
                 slogan: info.slogan,
                 logo: info.logo || '', // Logo đã là base64 string trong JSON
+                secret: secret, // ✅ NEW: Store player secret
                 score: 0,
                 energy: 100
             }, { upsert: true, new: true });
-            console.log(`✅ Imported player: ${playerCode} - ${info.name}`);
+            console.log(`✅ Imported player: ${playerCode} - ${info.name} (Secret: ${secret})`);
         }
         catch (error) {
             console.error(`❌ Failed to import ${playerCode}:`, error.message);
@@ -48,12 +66,13 @@ exports.importPlayers = importPlayers;
  * Get danh sách players từ DB
  */
 const getAvailablePlayers = async () => {
-    const players = await player_model_1.Player.find({}).select('code name logo slogan');
+    const players = await player_model_1.Player.find({}).select('code name logo slogan secret');
     return players.map(p => ({
         code: p.code,
         name: p.name,
         logo: p.logo,
-        slogan: p.slogan
+        slogan: p.slogan,
+        secret: p.secret || '' // ✅ Include secret for display
     }));
 };
 exports.getAvailablePlayers = getAvailablePlayers;

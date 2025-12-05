@@ -26,7 +26,7 @@
           >
             <!-- Hiển thị player với background màu -->
             <div v-if="getPlayerAtPosition(x, y)" class="player-indicator"
-                 :style="{ backgroundColor: getPlayerColor(getPlayerAtPosition(x, y)!.playerId || getPlayerAtPosition(x, y)!.code) }">
+                 :style="getPlayerIndicatorStyle(getPlayerAtPosition(x, y)!, x, y)">
               <span class="player-icon">⛵</span>
               <!-- Treasure badge nhấp nháy với giá trị nếu player đang mang treasure -->
               <span v-if="getPlayerAtPosition(x, y)!.carriedTreasure && getPlayerAtPosition(x, y)!.carriedTreasure > 0" 
@@ -114,6 +114,36 @@ const getPlayerColor = (playerId: string) => {
     (p.code === playerId) || (p.playerId === playerId)
   )
   return index >= 0 ? PLAYER_COLORS[index % PLAYER_COLORS.length]! : '#666'
+}
+
+/**
+ * Get player indicator style - show base color as border if player is at base
+ */
+const getPlayerIndicatorStyle = (player: any, x: number, y: number) => {
+  const playerColor = getPlayerColor(player.playerId || player.code)
+  const style: any = {
+    backgroundColor: playerColor
+  }
+  
+  // If player is at base, add thick border with base color tint
+  if (props.mapData?.bases && props.players) {
+    const baseIndex = props.mapData.bases.findIndex((b: any) => {
+      const bx = Array.isArray(b) ? b[0] : b.x
+      const by = Array.isArray(b) ? b[1] : b.y
+      return bx === x && by === y
+    })
+    
+    if (baseIndex >= 0 && baseIndex < props.players.length) {
+      // Player is at their base - add thick border
+      const r = parseInt(playerColor.slice(1, 3), 16)
+      const g = parseInt(playerColor.slice(3, 5), 16)
+      const b = parseInt(playerColor.slice(5, 7), 16)
+      style.border = `3px solid rgba(${r}, ${g}, ${b}, 0.8)`
+      style.boxShadow = `inset 0 0 8px rgba(${r}, ${g}, ${b}, 0.6)`
+    }
+  }
+  
+  return style
 }
 
 const getPlayerAtPosition = (x: number, y: number): any | null => {
@@ -363,7 +393,6 @@ const getCellTitle = (x: number, y: number) => {
   padding: 10px;
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-  height: 100%;
   max-height: 100%;
   display: flex;
   flex-direction: column;
@@ -385,12 +414,11 @@ const getCellTitle = (x: number, y: number) => {
   background: #ddd;
   border: 2px solid #999;
   aspect-ratio: 1 / 1;
-  width: auto;
+  width: 100%;
   height: 100%;
   max-height: 100%;
   max-width: 100%;
   margin: 0 auto;
-  /* Ensure grid scales content to fit container */
   overflow: hidden;
   box-sizing: border-box;
   flex: 1;

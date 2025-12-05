@@ -304,7 +304,7 @@ const loadData = async () => {
 const saveSettings = async () => {
   try {
     saving.value = true;
-    await axios.put(`/api/game/${gameId}/settings`, settings.value);
+    await axios.put(`/api/admin/game/${gameId}/settings`, settings.value);
     
     successMessage.value = 'Settings saved successfully!';
     setTimeout(() => successMessage.value = '', 3000);

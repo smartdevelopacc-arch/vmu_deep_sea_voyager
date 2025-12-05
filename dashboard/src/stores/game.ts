@@ -1,7 +1,9 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { adminAPI } from '../api/client'
-import apiClient from '../api/client'
+
+// Match backend MAX_TRAPS_PER_PLAYER
+const MAX_TRAPS_PER_PLAYER = 5
 
 export const useGameStore = defineStore('games', () => {
   const games = ref<any[]>([])
@@ -22,23 +24,45 @@ export const useGameStore = defineStore('games', () => {
     }
   }
 
+  function syncTrapCounts() {
+    if (!currentGame.value?.players || !currentGame.value?.map?.traps) return;
+    
+    // Count traps per player from actual traps on the map
+    const trapCountByPlayer: Record<string, number> = {};
+    const trapsArray = Array.isArray(currentGame.value.map.traps)
+      ? currentGame.value.map.traps
+      : Object.values(currentGame.value.map.traps);
+    
+    trapsArray.forEach((trap: any) => {
+      const owner = trap.playerId || trap[3];
+      if (owner) {
+        trapCountByPlayer[owner] = (trapCountByPlayer[owner] || 0) + 1;
+      }
+    });
+    
+    // Update each player's trapCount with actual count from board
+    currentGame.value.players.forEach((player: any) => {
+      const playerId = player.playerId || player.code;
+      const actualCount = trapCountByPlayer[playerId] || 0;
+      // Set to actual count, cap at MAX_TRAPS_PER_PLAYER
+      player.trapCount = Math.min(actualCount, MAX_TRAPS_PER_PLAYER);
+      
+      if (actualCount > MAX_TRAPS_PER_PLAYER) {
+        console.warn(`⚠️ Player ${playerId} has ${actualCount} traps but max is ${MAX_TRAPS_PER_PLAYER}!`);
+      }
+    });
+    
+    console.log('🪤 Trap counts synced from actual board state:', trapCountByPlayer);
+  }
+
   async function fetchGameState(gameId: string) {
     loading.value = true
     error.value = null
     try {
-      // Fetch from new client API endpoint
-      const [stateResponse, configResponse] = await Promise.all([
-        adminAPI.getGameState(gameId),
-        apiClient.get(`/game/${gameId}/config`)
-      ])
-      
-      // State response: { currentTurn, status, treasures, owners, players }
+      // Single call contains runtime state (treasures, traps, owners) + map dims
+      const stateResponse = await adminAPI.getGameState(gameId)
       const state = stateResponse.data
-      // Config response: { width, height, terrain, waves, bases, settings }
-      const config = configResponse.data
-      
       console.log('🔍 State response:', state)
-      console.log('🔍 Config response:', config)
       
       currentGame.value = {
         gameId,
@@ -46,18 +70,29 @@ export const useGameStore = defineStore('games', () => {
         status: state.status,
         players: state.players || [],
         map: {
-          width: config.width,
-          height: config.height,
-          obstacles: config.terrain,
+          width: state.map?.width,
+          height: state.map?.height,
+          obstacles: state.map?.terrain,
           treasures: state.treasures,
-          waves: config.waves || [],
-          bases: config.bases,
-          traps: config.traps || [] // Load traps from config (admin endpoint)
+          waves: state.map?.waves || [],
+          bases: state.map?.bases,
+          traps: state.traps || [] // runtime traps
         }
       }
       
       console.log('🔍 currentGame.value.map:', currentGame.value.map)
-      console.log(`✅ Game state loaded: ${currentGame.value.players.length} players, ${config.width}x${config.height} map`)
+      console.log(`✅ Game state loaded: ${currentGame.value.players.length} players, ${state.map?.width}x${state.map?.height} map`)
+      
+      // Cap all player trapCounts at MAX_TRAPS_PER_PLAYER to prevent display overflow
+      currentGame.value.players.forEach((player: any) => {
+        if (player.trapCount && player.trapCount > MAX_TRAPS_PER_PLAYER) {
+          console.warn(`⚠️ Player ${player.code || player.playerId} trapCount ${player.trapCount} exceeds max ${MAX_TRAPS_PER_PLAYER}, capping it`);
+          player.trapCount = MAX_TRAPS_PER_PLAYER;
+        }
+      });
+      
+      // Sync trap counts from actual board state
+      syncTrapCounts()
     } catch (err: any) {
       error.value = err.message
       console.error('❌ Error fetching game state:', err)
@@ -174,7 +209,31 @@ export const useGameStore = defineStore('games', () => {
       // Add new trap
       const key = `${position.x},${position.y}`;
       currentGame.value.map.traps[key] = { playerId, position, danger };
+      
       console.log(`🪤 Trap added at (${position.x}, ${position.y}) danger=${danger}`);
+      
+      // Sync trap counts from actual board state
+      syncTrapCounts();
+    },
+    removeTrap(position: { x: number; y: number }) {
+      if (!currentGame.value?.map?.traps) return;
+      
+      // Remove trap from map
+      if (Array.isArray(currentGame.value.map.traps)) {
+        currentGame.value.map.traps = currentGame.value.map.traps.filter((t: any) => {
+          const tx = t.position?.x ?? t[0];
+          const ty = t.position?.y ?? t[1];
+          return !(tx === position.x && ty === position.y);
+        });
+      } else {
+        const key = `${position.x},${position.y}`;
+        delete currentGame.value.map.traps[key];
+      }
+      
+      console.log(`🧹 Trap removed at (${position.x}, ${position.y})`);
+      
+      // Sync trap counts from actual board state
+      syncTrapCounts();
     },
     // Update a game item in list without refetch
     updateGameMeta(gameId: string, patch: Record<string, any>) {

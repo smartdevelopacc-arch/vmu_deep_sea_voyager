@@ -10,7 +10,7 @@ const getLeaderboard = async (req, res) => {
             return res.status(404).json({ error: 'Game not found' });
         }
         // Sử dụng scores từ DB hoặc player scores
-        // ✅ FIX: Include playerCode to link score with player identity
+        // Include playerCode to link score with player identity
         let leaderboard;
         if (game.scores && game.scores.length > 0) {
             leaderboard = game.scores

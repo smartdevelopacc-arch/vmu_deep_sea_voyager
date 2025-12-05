@@ -18,6 +18,13 @@
           <h3>{{ player.name }}</h3>
           <p class="player-code">Code: {{ player.code }}</p>
           <p class="player-slogan">{{ player.slogan }}</p>
+          <div class="player-secret">
+            <label>Secret:</label>
+            <code class="secret-code">{{ player.secret || 'Not set' }}</code>
+            <button @click="regenerateSecret(player.code)" class="btn-small btn-generate" title="Generate new secret">
+              🎲 Random
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -31,6 +38,7 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
 import { usePlayerStore } from '../stores/players'
+import axios from 'axios'
 
 const playerStore = usePlayerStore()
 
@@ -40,6 +48,19 @@ const error = computed(() => playerStore.error)
 
 const fetchPlayers = () => {
   playerStore.fetchPlayers()
+}
+
+const regenerateSecret = async (playerCode: string) => {
+  try {
+    const response = await axios.post(`/api/players/${playerCode}/regenerate-secret`)
+    if (response.data.success) {
+      alert(`✅ New secret for ${playerCode}: ${response.data.secret}\n\nCopy this to your bot's .env file as PLAYER_SECRET`)
+      // Refresh player list to show new secret
+      fetchPlayers()
+    }
+  } catch (err: any) {
+    alert(`❌ Failed to regenerate secret: ${err.response?.data?.error || err.message}`)
+  }
 }
 
 onMounted(() => {
@@ -79,9 +100,9 @@ onMounted(() => {
 }
 
 .players-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
   margin-top: 20px;
 }
 
@@ -91,7 +112,7 @@ onMounted(() => {
   padding: 20px;
   display: flex;
   gap: 15px;
-  align-items: start;
+  align-items: center;
 }
 
 .player-logo img {
@@ -121,6 +142,49 @@ onMounted(() => {
   color: #888;
   font-size: 14px;
   margin: 5px 0 0 0;
+}
+
+.player-secret {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.player-secret label {
+  font-size: 12px;
+  color: #666;
+  font-weight: 500;
+}
+
+.secret-code {
+  background: #2d3748;
+  color: #10b981;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  font-weight: bold;
+  letter-spacing: 1px;
+}
+
+.btn-small {
+  padding: 4px 10px;
+  font-size: 12px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-generate {
+  background: #8b5cf6;
+  color: white;
+}
+
+.btn-generate:hover {
+  background: #7c3aed;
+  transform: scale(1.05);
 }
 
 code {

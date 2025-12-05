@@ -11,7 +11,7 @@ export const getLeaderboard = async (req: Request, res: Response) => {
     }
 
     // Sử dụng scores từ DB hoặc player scores
-    // ✅ FIX: Include playerCode to link score with player identity
+    // Include playerCode to link score with player identity
     let leaderboard;
     if (game.scores && game.scores.length > 0) {
       leaderboard = game.scores
