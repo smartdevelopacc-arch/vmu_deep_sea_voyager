@@ -8,6 +8,7 @@
       <button @click="handleStop" class="btn btn-danger" :disabled="!isActive">⏹️ Stop Game</button>
       <button @click="handleReset" class="btn btn-warning" :disabled="isActive">🔄 Reset Game</button>
       <router-link :to="`/game/${gameId}/settings`" class="btn btn-secondary">⚙️ Settings</router-link>
+      <router-link :to="`/game/${gameId}/map-editor`" class="btn btn-secondary">🗺️ Map Editor</router-link>
       <router-link to="/games" class="btn btn-secondary">← Back to Games</router-link>
     </div>
 
@@ -57,6 +58,20 @@
 
         <!-- Info - Right side -->
         <div class="info-sidebar">
+          <!-- Sponsors Section -->
+          <div class="sponsors-section">
+            <h3>Sponsors</h3>
+            <div class="ad-slot">
+              <img src="https://via.placeholder.com/250x250/3b82f6/ffffff?text=Ad+Space" alt="Advertisement" />
+            </div>
+            <div class="ad-slot">
+              <img src="https://via.placeholder.com/250x250/22c55e/ffffff?text=Your+Logo" alt="Advertisement" />
+            </div>
+            <div class="ad-slot">
+              <img src="https://via.placeholder.com/250x250/a855f7/ffffff?text=Sponsor" alt="Advertisement" />
+            </div>
+          </div>
+
           <div class="info-grid">
         <div class="info-card">
           <h3>Status</h3>
@@ -86,20 +101,21 @@
               <thead>
                 <tr>
                   <th>Team</th>
-                  <th>Position</th>
                   <th>Energy</th>
                   <th>Score</th>
                   <th>Traps</th>
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="(player, index) in sortedPlayers" :key="player.code">
+                <tr v-for="(player, index) in sortedPlayers" 
+                    :key="player.code"
+                    :class="{ 'score-updated': recentScoreUpdates.includes(player.code) }"
+                    class="player-row">
                   <td>
                     <span class="player-badge" :style="{ backgroundColor: getPlayerColor(index) }">
                       {{ player.teamName || player.name || player.code }}
                     </span>
                   </td>
-                  <td>({{ player.position?.x }}, {{ player.position?.y }})</td>
                   <td>{{ player.energy }}</td>
                   <td class="score-cell">{{ player.score || 0 }}</td>
                   <td>{{ player.trapCount || 0 }}</td>
@@ -139,6 +155,7 @@ const isActive = ref(false)
 const timeRemaining = ref<number>(0)
 const countdownInterval = ref<number | null>(null)
 const countdownStartTime = ref<number>(0) // Track khi bắt đầu countdown
+const recentScoreUpdates = ref<string[]>([])
 
 const currentGame = computed(() => gameStore.currentGame)
 const loading = computed(() => gameStore.loading)
@@ -203,7 +220,40 @@ const getPlayerColor = (index: number): string => {
 
 const sortedPlayers = computed(() => {
   if (!currentGame.value?.players) return []
-  return [...currentGame.value.players].sort((a, b) => (b.score || 0) - (a.score || 0))
+  
+  // Build player map from global players store by playerId and code
+  const playersById: Record<string, any> = {}
+  const playersByCode: Record<string, any> = {}
+  for (const gp of playerStore.players || []) {
+    if (gp._id) playersById[gp._id] = gp
+    if (gp.code) playersByCode[gp.code] = gp
+  }
+  
+  const result = [...currentGame.value.players]
+    .map((p: any) => {
+      // Try to find global player info by playerId or code
+      const globalPlayer = playersById[p.playerId] || playersByCode[p.code]
+      
+      const enriched = {
+        ...p,
+        // Enrich with teamName from global store
+        teamName: p.teamName || globalPlayer?.teamName || globalPlayer?.name || p.name,
+        name: p.name || globalPlayer?.name || p.code
+      }
+      
+      // Debug log
+      console.log('🎮 Player enriched:', {
+        original: p,
+        globalPlayer,
+        enriched,
+        displayName: enriched.teamName || enriched.name || enriched.code
+      })
+      
+      return enriched
+    })
+    .sort((a, b) => (b.score || 0) - (a.score || 0))
+  
+  return result
 })
 
 // Leaderboard data when game finished: prefer finalScores from server
@@ -241,13 +291,13 @@ const finishedLeaderboard = computed(() => {
     globalByCode[gp.code] = gp
   }
   return (currentGame.value?.players || [])
-    .map(p => ({
+    .map((p: any) => ({
       playerId: p.playerId,
       score: p.score || 0,
       code: p.code,
       name: p.teamName || p.name || globalByCode[p.code]?.teamName || globalByCode[p.code]?.name
     }))
-    .sort((a, b) => b.score - a.score)
+    .sort((a: any, b: any) => b.score - a.score)
 })
 
 let tickListener: ((data: any) => void) | null = null
@@ -321,7 +371,22 @@ onMounted(() => {
     // Optionally could trigger periodic full sync every N ticks
   }
   socket.value?.on('game:tick:complete', tickListener)
+  
+  // Watch for score changes to trigger animation
+  socket.value?.on('player:score:updated', (data: any) => {
+    if (data?.playerCode) {
+      recentScoreUpdates.value.push(data.playerCode)
+      // Remove after animation
+      setTimeout(() => {
+        const idx = recentScoreUpdates.value.indexOf(data.playerCode)
+        if (idx > -1) {
+          recentScoreUpdates.value.splice(idx, 1)
+        }
+      }, 1500)
+    }
+  })
 })
+
 
 onUnmounted(() => {
   if (tickListener) {
@@ -333,7 +398,15 @@ onUnmounted(() => {
 
 <style scoped>
 .game-control {
-  padding: 20px;
+  padding: 15px;
+  max-width: 100%;
+  margin: 0 auto;
+}
+
+.game-state {
+  height: 95vh;
+  display: flex;
+  flex-direction: column;
 }
 
 .actions {
@@ -341,6 +414,7 @@ onUnmounted(() => {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+  flex-shrink: 0;
 }
 
 .btn {
@@ -448,26 +522,26 @@ onUnmounted(() => {
 
 .info-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 20px;
-  margin: 20px 0;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin: 15px 0;
 }
 
 .info-card {
   background: #f5f5f5;
-  padding: 20px;
-  border-radius: 8px;
+  padding: 8px;
+  border-radius: 6px;
   text-align: center;
 }
 
 .info-card h3 {
-  margin: 0 0 10px 0;
-  font-size: 14px;
+  margin: 0 0 3px 0;
+  font-size: 10px;
   color: #666;
 }
 
 .info-card p {
-  font-size: 24px;
+  font-size: 14px;
   font-weight: bold;
   margin: 0;
 }
@@ -498,95 +572,204 @@ onUnmounted(() => {
   display: flex;
   gap: 20px;
   margin-top: 20px;
+  flex: 1;
+  min-height: 0;
 }
 
 .map-section {
-  flex: 0 0 auto;
-  max-width: calc(100vh - 250px);
-  width: 100%;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  max-height: 95vh;
 }
 
 .info-sidebar {
-  flex: 1;
-  min-width: 300px;
-  max-width: 400px;
+  flex: 0 0 auto;
+  min-width: 200px;
+  max-width: 250px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sponsors-section {
+  margin-bottom: 12px;
+  background: #f9fafb;
+  padding: 10px;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sponsors-section h3 {
+  margin: 0 0 6px 0;
+  font-size: 12px;
+  color: #374151;
+  text-align: center;
+}
+
+.ad-slot {
+  background: white;
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.ad-slot img {
+  width: 100%;
+  height: auto;
+  display: block;
 }
 
 .info-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 15px;
-  margin-bottom: 20px;
+  gap: 8px;
+  margin-bottom: 12px;
 }
 
 .players-section {
-  margin-top: 20px;
+  margin-top: 12px;
+  background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%);
+  border-radius: 8px;
+  padding: 12px;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.15);
 }
 
 .players-section h2 {
   margin-top: 0;
-  margin-bottom: 15px;
-  font-size: 18px;
+  margin-bottom: 10px;
+  font-size: 16px;
+  font-weight: bold;
+  color: white;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
 
 table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   margin-top: 10px;
-  font-size: 14px;
+  font-size: 12px;
+  background: white;
+  border-radius: 6px;
+  overflow: hidden;
 }
 
 th, td {
-  padding: 10px 8px;
+  padding: 8px 6px;
   text-align: left;
-  border-bottom: 1px solid #ddd;
+  border-bottom: 1px solid #e5e7eb;
 }
 
 th {
-  background: #f5f5f5;
-  font-weight: 600;
+  background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%);
+  font-weight: 700;
+  color: white;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+tr:hover {
+  background: #f0f9ff;
+}
+
+tr:last-child td {
+  border-bottom: none;
 }
 
 .player-badge {
   display: inline-block;
-  padding: 4px 12px;
+  padding: 4px 8px;
   border-radius: 12px;
   color: white;
   font-weight: bold;
-  font-size: 13px;
+  font-size: 11px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
 }
 
 .score-cell {
   font-weight: bold;
-  font-size: 16px;
+  font-size: 14px;
+  color: #1e40af;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.1);
 }
 
 .socket-status {
-  margin-top: 20px;
-  padding: 15px;
+  margin-top: 12px;
+  padding: 10px;
   background: #f5f5f5;
-  border-radius: 8px;
+  border-radius: 6px;
 }
 
 .socket-status h3 {
   margin-top: 0;
-  margin-bottom: 10px;
-  font-size: 16px;
+  margin-bottom: 6px;
+  font-size: 13px;
 }
 
 .connected {
   color: #22c55e;
   font-weight: 600;
+  font-size: 11px;
 }
 
 .disconnected {
   color: #ef4444;
   font-weight: 600;
+  font-size: 11px;
 }
 
 .last-update {
-  font-size: 12px;
+  font-size: 10px;
   color: #666;
-  margin-top: 5px;
+  margin-top: 4px;
+}
+
+@keyframes scoreHighlight {
+  0% {
+    background: #fbbf24;
+    transform: translateY(-2px);
+  }
+  50% {
+    background: #fcd34d;
+    transform: translateY(0);
+  }
+  100% {
+    background: transparent;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scoreMove {
+  0% {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.player-row {
+  transition: all 0.3s ease;
+}
+
+.player-row.score-updated {
+  animation: scoreMove 0.6s ease-out, scoreHighlight 0.8s ease-out;
+}
+
+.player-row.score-updated .score-cell {
+  animation: scoreHighlight 0.8s ease-out;
+  font-size: 16px !important;
 }
 </style>

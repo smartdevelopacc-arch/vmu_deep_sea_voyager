@@ -5,6 +5,7 @@ import Games from '../views/Games.vue'
 import GameControl from '../views/GameControl.vue'
 import CreateGame from '../views/CreateGame.vue'
 import GameSettings from '../views/GameSettings.vue'
+import MapEditor from '../views/MapEditor.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -35,9 +36,19 @@ const router = createRouter({
       component: GameControl
     },
     {
+      path: '/games/:id/control',
+      name: 'game-control-alt',
+      component: GameControl
+    },
+    {
       path: '/game/:id/settings',
       name: 'game-settings',
       component: GameSettings
+    },
+    {
+      path: '/game/:id/map-editor',
+      name: 'map-editor',
+      component: MapEditor
     }
   ]
 })

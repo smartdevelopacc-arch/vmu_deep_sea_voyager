@@ -389,8 +389,13 @@ const handleCollision = (gameState, attacker, victim) => {
     victim.position = { ...gameState.map.bases[baseIndex] };
     victim.energy = MAX_ENERGY;
     victim.isAtBase = true;
-    // Chuyển kho báu sang kẻ tấn công
-    if (victim.carriedTreasure) {
+    // 🔧 FIX: Cộng điểm cho nạn nhân trước khi mất kho báu
+    // Nạn nhân được cộng điểm vì về base sau khi va chạm
+    if (victim.carriedTreasure && victim.carriedTreasure > 0) {
+        victim.score += victim.carriedTreasure;
+        console.log(`🏆 Player ${victim.playerId} scored ${victim.carriedTreasure} after collision (now at base). New score: ${victim.score}`);
+        (0, socketEvents_1.emitScoreUpdate)(gameState.gameId, victim.playerId, victim.score);
+        // Chuyển kho báu sang kẻ tấn công NHƯNG kẻ tấn công sẽ phải về base riêng để cộng điểm
         attacker.carriedTreasure = victim.carriedTreasure;
         victim.carriedTreasure = undefined;
     }

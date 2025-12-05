@@ -10,15 +10,25 @@ const getLeaderboard = async (req, res) => {
             return res.status(404).json({ error: 'Game not found' });
         }
         // Sử dụng scores từ DB hoặc player scores
+        // ✅ FIX: Include playerCode to link score with player identity
         let leaderboard;
         if (game.scores && game.scores.length > 0) {
             leaderboard = game.scores
-                .map((s) => ({ playerId: s.playerId, score: s.score }))
+                .map((s) => ({
+                playerId: s.playerId,
+                playerCode: s.playerCode,
+                score: s.score
+            }))
                 .sort((a, b) => b.score - a.score);
         }
         else {
             leaderboard = game.players
-                .map((p) => ({ playerId: p.playerId, score: p.score || 0 }))
+                .map((p) => ({
+                playerId: p.playerId,
+                playerCode: p.code || p.playerId,
+                playerName: p.name,
+                score: p.score || 0
+            }))
                 .sort((a, b) => b.score - a.score);
         }
         res.json({ leaderboard });

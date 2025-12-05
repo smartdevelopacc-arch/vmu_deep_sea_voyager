@@ -52,7 +52,7 @@ export const useGameStore = defineStore('games', () => {
           treasures: state.treasures,
           waves: config.waves || [],
           bases: config.bases,
-          traps: {} // Will be populated by socket events
+          traps: config.traps || [] // Load traps from config (admin endpoint)
         }
       }
       

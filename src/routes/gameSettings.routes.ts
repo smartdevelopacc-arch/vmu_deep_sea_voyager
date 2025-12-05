@@ -85,7 +85,7 @@ router.put('/:gameId/settings', async (req: Request, res: Response) => {
 router.put('/:gameId/map', async (req: Request, res: Response) => {
   try {
     const { gameId } = req.params;
-    const { terrain, waves, treasures, bases } = req.body;
+    const { terrain, waves, treasures, bases, traps } = req.body;
 
     const game = await GameModel.findOne({ code: gameId });
     if (!game) {
@@ -102,6 +102,18 @@ router.put('/:gameId/map', async (req: Request, res: Response) => {
     if (waves) game.map.waves = waves;
     if (treasures) game.map.treasures = treasures;
     if (bases) game.map.bases = bases;
+    
+    // Update runtime state traps if provided (for pre-placed traps)
+    if (traps !== undefined) {
+      if (!game.runtimeState) {
+        game.runtimeState = {
+          treasures: game.map.treasures || [],
+          owners: [],
+          traps: []
+        }
+      }
+      game.runtimeState.traps = traps
+    }
 
     await game.save();
 
@@ -113,7 +125,8 @@ router.put('/:gameId/map', async (req: Request, res: Response) => {
         terrain: game.map.terrain,
         waves: game.map.waves,
         treasures: game.map.treasures,
-        bases: game.map.bases
+        bases: game.map.bases,
+        traps: game.runtimeState?.traps || []
       }
     });
   } catch (error: any) {

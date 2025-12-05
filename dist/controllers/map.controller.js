@@ -19,7 +19,9 @@ const getGameConfig = async (req, res) => {
             height: game.map.height,
             terrain: game.map.terrain,
             waves: game.map.waves,
+            treasures: game.map.treasures,
             bases: game.map.bases,
+            traps: game.runtimeState?.traps || [],
             settings: {
                 enableTraps: game.settings?.enableTraps ?? true,
                 maxTurns: game.settings?.maxTurns,

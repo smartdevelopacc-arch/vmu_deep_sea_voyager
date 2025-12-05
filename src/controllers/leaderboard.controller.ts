@@ -11,14 +11,24 @@ export const getLeaderboard = async (req: Request, res: Response) => {
     }
 
     // Sử dụng scores từ DB hoặc player scores
+    // ✅ FIX: Include playerCode to link score with player identity
     let leaderboard;
     if (game.scores && game.scores.length > 0) {
       leaderboard = game.scores
-        .map((s: any) => ({ playerId: s.playerId, score: s.score }))
+        .map((s: any) => ({ 
+          playerId: s.playerId, 
+          playerCode: s.playerCode,
+          score: s.score 
+        }))
         .sort((a: any, b: any) => b.score - a.score);
     } else {
       leaderboard = game.players
-        .map((p: any) => ({ playerId: p.playerId, score: p.score || 0 }))
+        .map((p: any) => ({ 
+          playerId: p.playerId,
+          playerCode: p.code || p.playerId,
+          playerName: p.name,
+          score: p.score || 0 
+        }))
         .sort((a: any, b: any) => b.score - a.score);
     }
 
