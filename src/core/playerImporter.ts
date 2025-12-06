@@ -2,12 +2,27 @@ import fs from 'fs';
 import path from 'path';
 import { Player } from '../models/player.model';
 import { connectDB } from './db';
+import crypto from 'crypto';
 
 interface PlayerInfo {
   name: string;
   slogan: string;
   logo: string;
 }
+
+/**
+ * Generate a secure random secret for player authentication
+ * 5 characters: uppercase letters and numbers
+ */
+const generatePlayerSecret = (): string => {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let result = '';
+  const randomBytes = crypto.randomBytes(5);
+  for (let i = 0; i < 5; i++) {
+    result += chars[randomBytes[i] % chars.length];
+  }
+  return result;
+};
 
 /**
  * Import players từ thư mục assets/players/ vào MongoDB
@@ -34,6 +49,10 @@ export const importPlayers = async () => {
     try {
       const info: PlayerInfo = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
 
+      // ✅ NEW: Generate or retrieve existing secret
+      const existingPlayer = await Player.findOne({ code: playerCode });
+      const secret = existingPlayer?.secret || generatePlayerSecret();
+
       // Upsert player vào database
       await Player.findOneAndUpdate(
         { code: playerCode },
@@ -42,13 +61,14 @@ export const importPlayers = async () => {
           name: info.name,
           slogan: info.slogan,
           logo: info.logo || '', // Logo đã là base64 string trong JSON
+          secret: secret, // ✅ NEW: Store player secret
           score: 0,
           energy: 100
         },
         { upsert: true, new: true }
       );
 
-      console.log(`✅ Imported player: ${playerCode} - ${info.name}`);
+      console.log(`✅ Imported player: ${playerCode} - ${info.name} (Secret: ${secret})`);
     } catch (error: any) {
       console.error(`❌ Failed to import ${playerCode}:`, error.message);
     }
@@ -61,12 +81,13 @@ export const importPlayers = async () => {
  * Get danh sách players từ DB
  */
 export const getAvailablePlayers = async () => {
-  const players = await Player.find({}).select('code name logo slogan');
+  const players = await Player.find({}).select('code name logo slogan secret');
   return players.map(p => ({
     code: p.code,
     name: p.name,
     logo: p.logo,
-    slogan: p.slogan
+    slogan: p.slogan,
+    secret: p.secret || '' // ✅ Include secret for display
   }));
 };
 

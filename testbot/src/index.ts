@@ -14,78 +14,12 @@
 
 import axios from 'axios';
 import * as dotenv from 'dotenv';
+import { Position, BotConfig, GameConfig, GameState } from './types';
+import { decideAction, StrategyContext } from './strategy';
+import { ApiEndpoints } from './api-endpoints';
 
 // Load environment variables
 dotenv.config();
-
-/**
- * Represents a 2D position on the game map.
- */
-interface Position {
-  x: number;
-  y: number;
-}
-
-/**
- * Bot configuration settings.
- */
-interface BotConfig {
-  /** Unique identifier for the game to join */
-  gameId: string;
-  /** Player identifier (matches team code or playerId in game) */
-  playerId: string;
-  /** Base URL for game API (e.g., 'http://localhost:3000/api') */
-  apiUrl: string;
-  /** Milliseconds between each action execution */
-  actionInterval: number;
-}
-
-/**
- * Static game configuration - fetched once at game start, never changes.
- */
-interface GameConfig {
-  /** Map dimensions */
-  width: number;
-  height: number;
-  /** Static terrain layout: -1 = island, 0 = sea */
-  terrain: number[][];
-  /** Base positions for each player (indexed by player number) */
-  bases: Position[];
-  /** Game settings */
-  settings: {
-    /** Whether traps are enabled in this game */
-    enableTraps?: boolean;
-  };
-}
-
-/**
- * Dynamic game state - refreshed frequently as game progresses.
- */
-interface GameState {
-  /** 2D array of treasure values at each position (changes as treasures are collected) */
-  treasures: number[][];
-  /** 2D array of wave intensity (0-5) at each position */
-  waves: number[][];
-  /** All players in the game with current positions and stats */
-  players: Array<{
-    /** Legacy player code identifier */
-    code?: string;
-    /** Current player identifier */
-    playerId?: string;
-    /** Current position on map */
-    position: Position;
-    /** Current energy level */
-    energy: number;
-    /** Total score accumulated */
-    score: number;
-    /** Treasure value currently being carried (0 if none) */
-    carriedTreasure?: number;
-  }>;
-  /** Current turn number */
-  currentTurn: number;
-  /** Game status: 'waiting', 'playing', or 'finished' */
-  status: string;
-}
 
 /**
  * TestBot - Autonomous game player for testing and demonstration.
@@ -110,6 +44,7 @@ class TestBot {
   private config: BotConfig;
   private running: boolean = false;
   private intervalId?: NodeJS.Timeout;
+  private api: ApiEndpoints;
   
   // Static game configuration (fetched once)
   private gameConfig?: GameConfig;
@@ -119,6 +54,14 @@ class TestBot {
   private gameState?: GameState;
   private myPlayer?: any;
 
+  // Movement history tracking to prevent loops
+  private moveHistory: Array<{ position: Position; turn: number }> = [];
+  private lastDirection?: string;
+  private directionChangeCounter: number = 0;
+  private breakLoopAttempt: number = 0; // Track loop-breaking attempts
+  private readonly MAX_SAME_DIRECTION_TURNS = 8; // Max turns in same direction before considering stuck
+  private readonly HISTORY_SIZE = 15; // Track last N positions
+
   /**
    * Creates a new TestBot instance.
    * 
@@ -126,6 +69,7 @@ class TestBot {
    */
   constructor(config: BotConfig) {
     this.config = config;
+    this.api = new ApiEndpoints(config.apiUrl);
   }
 
   /**
@@ -183,7 +127,8 @@ class TestBot {
    */
   private async fetchGameConfig() {
     try {
-      const configResponse = await axios.get(`${this.config.apiUrl}/game/${this.config.gameId}/config`);
+      const endpoint = this.api.getGameConfig(this.config.gameId, this.config.playerId);
+      const configResponse = await axios.get(endpoint);
       
       this.gameConfig = {
         width: configResponse.data.width,
@@ -214,7 +159,8 @@ class TestBot {
    */
   private async fetchGameState() {
     try {
-      const stateResponse = await axios.get(`${this.config.apiUrl}/game/${this.config.gameId}/state`);
+      const endpoint = this.api.getGameState(this.config.gameId, this.config.playerId);
+      const stateResponse = await axios.get(endpoint);
       
       this.gameState = {
         treasures: stateResponse.data.treasures,
@@ -274,8 +220,9 @@ class TestBot {
    * 1. Validates bot is ready and game is still running
    * 2. Checks if game has finished, stops bot if true
    * 3. Refreshes game state every 5 turns
-   * 4. Decides next action based on current strategy
-   * 5. Sends action to server
+   * 4. Detects if stuck in movement loop and applies corrective action
+   * 5. Decides next action based on current strategy
+   * 6. Sends action to server
    * 
    * Automatically stops bot when game status is 'finished'.
    */
@@ -304,10 +251,64 @@ class TestBot {
         return;
       }
 
+      // Track movement history
+      if (this.myPlayer?.position) {
+        this.moveHistory.push({
+          position: { ...this.myPlayer.position },
+          turn: this.gameState?.currentTurn || 0
+        });
+        
+        // Keep only last 20 moves
+        if (this.moveHistory.length > 20) {
+          this.moveHistory.shift();
+        }
+      }
+
+      // Check if stuck in loop - if yes, apply corrective action
+      if (this.isStuckInLoop()) {
+        console.log(`🛑 Stuck loop detected! Current position: (${this.myPlayer.position.x}, ${this.myPlayer.position.y})`);
+        console.log(`📍 Move history (last 10):`, this.moveHistory.slice(-10).map(h => `(${h.position.x},${h.position.y})`).join(' -> '));
+        
+        // Try different strategies to break free:
+        // 1. Rest to reset and recover energy
+        // 2. On next detection, try going to treasures instead of base
+        // 3. On next detection, just rest aggressively
+        
+        if (!this.breakLoopAttempt) {
+          this.breakLoopAttempt = 0;
+        }
+        this.breakLoopAttempt++;
+        
+        if (this.breakLoopAttempt === 1) {
+          console.log(`💤 Attempt 1: Resting to break the loop...`);
+          await this.sendAction({ type: 'rest' });
+        } else if (this.breakLoopAttempt === 2) {
+          console.log(`💪 Attempt 2: Pushing through with aggressive movement...`);
+          // Force a movement in a new direction
+          const directions = ['north', 'south', 'east', 'west'];
+          const randomDir = directions[Math.floor(Math.random() * directions.length)];
+          await this.sendAction({ type: 'move', data: { direction: randomDir } });
+        } else {
+          console.log(`😴 Attempt ${this.breakLoopAttempt}: Extended rest to recover...`);
+          await this.sendAction({ type: 'rest' });
+        }
+        
+        // Clear direction history after breaking the loop
+        this.lastDirection = undefined;
+        this.directionChangeCounter = 0;
+        this.moveHistory = [];
+        
+        return;
+      } else {
+        // Reset break loop attempt counter when we're no longer stuck
+        this.breakLoopAttempt = 0;
+      }
+
       const action = this.decideAction();
       
       if (action) {
         console.log(`🎮 Bot action: ${action.type}`, action.data || '');
+        console.log(`   Game status: ${this.gameState?.status}, Turn: ${this.gameState?.currentTurn}`);
         await this.sendAction(action);
       }
 
@@ -317,222 +318,103 @@ class TestBot {
   }
 
   /**
-   * Decides the next action based on bot's current state and strategy priorities.
-   * 
-   * Strategy priorities (in order):
-   * 1. Rest - if energy < 20 (critical low)
-   * 2. Return to base - if carrying treasure (auto-drops on arrival)
-   * 3. Move to nearest treasure - navigate and auto-collect
-   * 4. Place trap - 10% random chance if enabled and energy > 30
-   * 5. Random move - fallback if no other action applicable
-   * 
-   * Flow: Find treasure → Move to it → Auto-collect → Return to base → Auto-drop → Repeat
+   * Decides the next action using the strategy module.
+   * Delegates to the exported decideAction function from strategy.ts
    * 
    * @returns Action object with type and optional data, or null if no action
    */
   private decideAction(): { type: string; data?: any } | null {
     if (!this.gameState || !this.myPlayer || !this.gameConfig) return null;
 
-    const { position, energy, carriedTreasure } = this.myPlayer;
+    const context: StrategyContext = {
+      myPlayer: {
+        position: this.myPlayer.position,
+        energy: this.myPlayer.energy,
+        carriedTreasure: this.myPlayer.carriedTreasure
+      },
+      basePosition: this.basePosition || null,
+      gameConfig: this.gameConfig,
+      gameState: this.gameState
+    };
 
-    // ============================================================
-    // ACTION 1: REST
-    // Endpoint: POST /game/:gameId/player/:playerId/rest
-    // Purpose: Restore energy when critically low
-    // Energy cost: 0 (gains energy instead)
-    // ============================================================
-    if (energy < 20) {
-      return { type: 'rest' };
+    const action = decideAction(context);
+
+    // Track movement to detect loops
+    if (action?.type === 'move' && action.data?.direction) {
+      this.trackMovement(action.data.direction);
     }
 
-    // ============================================================
-    // ACTION 2: MOVE (towards base)
-    // Endpoint: POST /game/:gameId/player/:playerId/move
-    // Purpose: Navigate back to base when carrying treasure
-    // Data: { direction: 'north' | 'south' | 'east' | 'west' }
-    // Energy cost: 1 + wave value at destination
-    // Note: Treasure is automatically dropped when reaching base
-    // Priority: HIGHEST when carrying treasure
-    // ============================================================
-    if (carriedTreasure && carriedTreasure > 0 && this.basePosition) {
-      // Return to base to score points
-      const direction = this.getDirectionTowards(position, this.basePosition);
-      console.log(`💰 Carrying treasure=${carriedTreasure}, returning to base at (${this.basePosition.x}, ${this.basePosition.y})...`);
-      return { type: 'move', data: { direction } };
-    }
+    return action;
+  }
 
-    // ============================================================
-    // ACTION 3: MOVE (towards treasure)
-    // Purpose: Navigate to nearest available treasure to collect it
-    // Note: Only looks for treasures not yet collected (value > 0 in current map state)
-    // Treasure is automatically picked up when reaching the cell
-    // Priority: HIGH when not carrying treasure
-    // ============================================================
-    const nearestTreasure = this.findNearestTreasure(position);
-    if (nearestTreasure) {
-      const direction = this.getDirectionTowards(position, nearestTreasure);
-      console.log(`🎯 Moving towards treasure at (${nearestTreasure.x}, ${nearestTreasure.y})`);
-      return { type: 'move', data: { direction } };
+  /**
+   * Tracks movement history to detect stuck patterns
+   * If bot is stuck repeating the same direction, force a rest/detour
+   */
+  private trackMovement(direction: string) {
+    // Check if direction changed
+    if (this.lastDirection !== direction) {
+      this.lastDirection = direction;
+      this.directionChangeCounter = 0;
     } else {
-      // ============================================================
-      // NO TREASURES LEFT: Return to base and stay
-      // Purpose: When all treasures collected, return home and rest
-      // ============================================================
-      if (this.basePosition) {
-        const atBase = position.x === this.basePosition.x && position.y === this.basePosition.y;
-        if (atBase) {
-          console.log(`🏠 At base, no treasures left - resting`);
-          return { type: 'rest' };
-        } else {
-          const direction = this.getDirectionTowards(position, this.basePosition);
-          console.log(`🏠 No treasures left, returning to base at (${this.basePosition.x}, ${this.basePosition.y})`);
-          return { type: 'move', data: { direction } };
-        }
-      }
+      this.directionChangeCounter++;
     }
 
-    // ============================================================
-    // ACTION 4: PLACE TRAP
-    // Endpoint: POST /game/:gameId/player/:playerId/trap
-    // Purpose: Place a trap at current position to damage other players
-    // Data: { position: {x, y}, danger: number }
-    // Requirements:
-    //   - Traps must be enabled in game settings
-    //   - Energy > 30 (needs sufficient energy)
-    //   - Can only place at current position (not adjacent)
-    //   - Cannot place on: islands, treasures, or bases
-    // Energy cost: Equal to danger value (30% of current energy, max 20)
-    // Probability: 10% random chance per action
-    // Effect: Creates trap that damages other players who step on it
-    // ============================================================
-    const enableTraps = this.gameConfig.settings?.enableTraps ?? true;
-    const trapRoll = Math.random();
-    if (enableTraps && energy > 30 && trapRoll < 0.1) {
-      console.log(`🎲 Trap roll: ${trapRoll.toFixed(2)} < 0.1 - attempting to place trap`);
-      
-      // Chỉ đặt bẫy tại vị trí hiện tại
-      const trapPos = position;
-      
-      // Validate position
-      let canPlace = true;
-      
-      // Không đặt trên đảo
-      if (this.gameConfig.terrain[trapPos.y]?.[trapPos.x] === -1) {
-        console.log(`  ❌ Current position is island`);
-        canPlace = false;
-      }
-      
-      // Không đặt trên kho báu
-      const treasureValue = this.gameState.treasures[trapPos.y]?.[trapPos.x];
-      if (treasureValue !== undefined && treasureValue !== 0) {
-        console.log(`  ❌ Current position has treasure (${treasureValue})`);
-        canPlace = false;
-      }
-      
-      // Không đặt trên base
-      const baseAtPos = this.gameConfig.bases?.find((b: any) => {
-        const bx = Array.isArray(b) ? b[0] : b.x;
-        const by = Array.isArray(b) ? b[1] : b.y;
-        return bx === trapPos.x && by === trapPos.y;
+    // Log repetitive movement warning
+    if (this.directionChangeCounter > 3) {
+      console.log(`⚠️  ⚠️  STUCK WARNING: Moving ${direction} for ${this.directionChangeCounter + 1} consecutive turns`);
+    }
+
+    // Record current position
+    if (this.myPlayer) {
+      this.moveHistory.push({
+        position: { ...this.myPlayer.position },
+        turn: this.gameState?.currentTurn || 0
       });
-      if (baseAtPos) {
-        console.log(`  ❌ Current position is base`);
-        canPlace = false;
-      }
-      
-      if (canPlace) {
-        const danger = Math.min(20, Math.floor(energy * 0.3)); // 30% energy, max 20
-        console.log(`✅ Placing trap at current position (${trapPos.x}, ${trapPos.y}) with danger ${danger}`);
-        return { 
-          type: 'trap', 
-          data: { 
-            position: trapPos,
-            danger 
-          } 
-        };
-      } else {
-        console.log(`❌ Cannot place trap at current position`);
+
+      // Keep only recent history
+      if (this.moveHistory.length > this.HISTORY_SIZE) {
+        this.moveHistory.shift();
       }
     }
-
-    // ============================================================
-    // FALLBACK: REST (if no base position found)
-    // Purpose: Stay safe when no clear goal
-    // ============================================================
-    console.log(`⚠️ No valid action found - resting`);
-    return { type: 'rest' };
   }
 
   /**
-   * Finds the nearest available treasure on the map using Manhattan distance.
-   * Only searches for treasures with value > 0 (not yet collected).
-   * 
-   * The map state is updated from server, so collected treasures (value = 0)
-   * are automatically excluded from search.
-   * 
-   * @param from - Starting position to search from
-   * @returns Position of nearest treasure, or null if no treasure found
+   * Detects if the bot is stuck in a repeating movement pattern
+   * Returns true if bot has been cycling through same positions
    */
-  private findNearestTreasure(from: Position): Position | null {
-    if (!this.gameState || !this.gameConfig) return null;
+  private isStuckInLoop(): boolean {
+    if (this.moveHistory.length < 6) return false;
 
-    const treasures = this.gameState.treasures;
-    const { width, height } = this.gameConfig;
-    let nearest: Position | null = null;
-    let minDistance = Infinity;
-    let availableTreasures = 0;
+    // Check if we're cycling back to the same position repeatedly
+    const recentPositions = this.moveHistory.slice(-6);
+    const uniquePositions = new Set(
+      recentPositions.map(h => `${h.position.x},${h.position.y}`)
+    );
 
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        if (treasures[y][x] > 0) {
-          availableTreasures++;
-          const distance = Math.abs(x - from.x) + Math.abs(y - from.y);
-          if (distance < minDistance) {
-            minDistance = distance;
-            nearest = { x, y };
-          }
-        }
+    // If we only visit 2-3 positions alternately, we're stuck in a loop
+    if (uniquePositions.size <= 3) {
+      // Further validation: check if first and last positions are same
+      const firstPos = recentPositions[0];
+      const lastPos = recentPositions[recentPositions.length - 1];
+      if (firstPos.position.x === lastPos.position.x && 
+          firstPos.position.y === lastPos.position.y) {
+        console.log(`🔄 STUCK LOOP DETECTED: Cycling through ${uniquePositions.size} positions`);
+        return true;
       }
     }
 
-    if (availableTreasures > 0) {
-      console.log(`📍 Found ${availableTreasures} available treasures, nearest at (${nearest?.x}, ${nearest?.y}) distance=${minDistance}`);
-    } else {
-      console.log(`📍 No treasures available on map`);
+    // Also check if we haven't moved at all in last 5 turns
+    const recentNoMove = this.moveHistory.slice(-5);
+    if (recentNoMove.every(h => 
+      h.position.x === recentNoMove[0].position.x && 
+      h.position.y === recentNoMove[0].position.y
+    )) {
+      console.log(`🔒 STUCK DETECTED: No movement for 5 turns`);
+      return true;
     }
 
-    return nearest;
-  }
-
-  /**
-   * Determines the best cardinal direction to move towards a target.
-   * Uses greedy approach: prioritizes the axis with larger distance.
-   * 
-   * Coordinate system:
-   * - X increases to the right (east)
-   * - Y increases downward (south)
-   * 
-   * @param from - Current position
-   * @param to - Target position
-   * @returns Direction string: 'north', 'south', 'east', or 'west'
-   */
-  private getDirectionTowards(from: Position, to: Position): string {
-    const dx = to.x - from.x;
-    const dy = to.y - from.y;
-
-    console.log(`🧭 Navigation: from (${from.x}, ${from.y}) to (${to.x}, ${to.y}) | dx=${dx}, dy=${dy}`);
-
-    // Prioritize the larger difference
-    if (Math.abs(dx) > Math.abs(dy)) {
-      const direction = dx > 0 ? 'east' : 'west';
-      console.log(`   → Moving ${direction} (horizontal priority)`);
-      return direction;
-    } else {
-      // Y increases downward, so dy > 0 means target is south
-      const direction = dy > 0 ? 'south' : 'north';
-      console.log(`   → Moving ${direction} (vertical priority)`);
-      return direction;
-    }
+    return false;
   }
 
   /**
@@ -543,22 +425,54 @@ class TestBot {
    * - rest: POST /game/:gameId/player/:playerId/rest
    * - trap: POST /game/:gameId/player/:playerId/trap
    * 
-   * Note: pick-treasure and drop-treasure actions are automatic
-   * and handled by the game engine during movement.
+   * Note: Treasure is auto-collected on move and auto-dropped at base
+   * Includes player-secret header for authentication
    * 
    * @param action - Action object with type and optional data
    */
   private async sendAction(action: { type: string; data?: any }) {
     try {
-      const endpoint = `${this.config.apiUrl}/game/${this.config.gameId}/player/${this.config.playerId}/${action.type}`;
+      // Use API manager to get endpoint
+      let endpoint: string;
+      switch (action.type) {
+        case 'move':
+          endpoint = this.api.postMove(this.config.gameId, this.config.playerId);
+          break;
+        case 'rest':
+          endpoint = this.api.postRest(this.config.gameId, this.config.playerId);
+          break;
+        case 'trap':
+          endpoint = this.api.postTrap(this.config.gameId, this.config.playerId);
+          break;
+        default:
+          throw new Error(`Unknown action type: ${action.type}`);
+      }
+
       console.log(`📤 Sending to: ${endpoint}`);
       console.log(`📤 Player ID: ${this.config.playerId}`);
       if (action.data) {
         console.log(`📤 Action data:`, JSON.stringify(action.data));
       }
-      await axios.post(endpoint, action.data || {});
+      
+      // ✅ NEW: Include player-secret header for authentication
+      const playerSecret = process.env.PLAYER_SECRET;
+      if (!playerSecret) {
+        console.error(`❌ PLAYER_SECRET not set in environment`);
+        return;
+      }
+
+      const response = await axios.post(endpoint, action.data || {}, {
+        headers: {
+          'player-secret': playerSecret
+        }
+      });
+      console.log(`✅ Action ${action.type} accepted (status: ${response.status})`);
     } catch (error: any) {
-      console.error(`❌ Error sending action:`, error.response?.data?.error || error.message);
+      if (error.response) {
+        console.error(`❌ Action failed - Status: ${error.response.status}, Error: ${error.response.data?.error || error.message}`);
+      } else {
+        console.error(`❌ Error sending action:`, error.message);
+      }
     }
   }
 }

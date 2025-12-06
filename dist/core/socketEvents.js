@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.emitGameEnd = exports.emitNewTurn = exports.emitAllScores = exports.emitTreasureDropped = exports.emitScoreUpdate = exports.emitCollision = exports.emitTrapPlaced = exports.emitTreasureCollected = exports.emitEnergyUpdate = exports.emitPlayerMove = exports.emitMapUpdate = exports.emitTickComplete = void 0;
+exports.emitGameEnd = exports.emitNewTurn = exports.emitAllScores = exports.emitPlayerTreasureUpdate = exports.emitTreasureDropped = exports.emitScoreUpdate = exports.emitCollision = exports.emitTrapRemoved = exports.emitTrapPlaced = exports.emitTreasureCollected = exports.emitEnergyUpdate = exports.emitPlayerMove = exports.emitMapUpdate = exports.emitTickComplete = void 0;
 const socket_1 = require("../socket");
 /**
  * Phát sự kiện hoàn thành tick - Client cần lấy lại trạng thái bản đồ
@@ -49,6 +49,13 @@ const emitTrapPlaced = (gameId, playerId, position, danger) => {
 };
 exports.emitTrapPlaced = emitTrapPlaced;
 /**
+ * Phát sự kiện gỡ bỏ bẫy (do bị dẫm hoặc bị đẩy ra vì vượt giới hạn)
+ */
+const emitTrapRemoved = (gameId, position) => {
+    socket_1.io.to(`game:${gameId}`).emit('trap:removed', { gameId, position });
+};
+exports.emitTrapRemoved = emitTrapRemoved;
+/**
  * Phát sự kiện va chạm
  */
 const emitCollision = (gameId, attackerId, victimId, energyLoss) => {
@@ -69,6 +76,13 @@ const emitTreasureDropped = (gameId, playerId) => {
     socket_1.io.to(`game:${gameId}`).emit('treasure:dropped', { gameId, playerId });
 };
 exports.emitTreasureDropped = emitTreasureDropped;
+/**
+ * Phát sự kiện cập nhật treasure status player (khi mất treasure do collision hoặc drop)
+ */
+const emitPlayerTreasureUpdate = (gameId, playerId, carriedTreasure) => {
+    socket_1.io.to(`game:${gameId}`).emit('player:treasure:changed', { gameId, playerId, carriedTreasure });
+};
+exports.emitPlayerTreasureUpdate = emitPlayerTreasureUpdate;
 /**
  * Phát sự kiện cập nhật tất cả điểm số
  */

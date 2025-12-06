@@ -8,6 +8,7 @@
       <button @click="handleStop" class="btn btn-danger" :disabled="!isActive">⏹️ Stop Game</button>
       <button @click="handleReset" class="btn btn-warning" :disabled="isActive">🔄 Reset Game</button>
       <router-link :to="`/game/${gameId}/settings`" class="btn btn-secondary">⚙️ Settings</router-link>
+      <router-link :to="`/game/${gameId}/map-editor`" class="btn btn-secondary">🗺️ Map Editor</router-link>
       <router-link to="/games" class="btn btn-secondary">← Back to Games</router-link>
     </div>
 
@@ -32,7 +33,7 @@
             <tr v-for="(row, idx) in finishedLeaderboard" :key="row.playerId">
               <td>{{ idx + 1 }}</td>
               <td>
-                <span class="player-badge" :style="{ backgroundColor: getPlayerColor(idx) }">
+                <span class="player-badge" :style="{ backgroundColor: getPlayerColor(row) }">
                   {{ row.name || row.code || row.playerId }}
                 </span>
               </td>
@@ -57,6 +58,58 @@
 
         <!-- Info - Right side -->
         <div class="info-sidebar">
+          <!-- Sponsors Section -->
+          <div class="sponsors-section">
+            <h3>Sponsors</h3>
+            <div class="sponsors-grid">
+              <div class="ad-slot">
+                <img src="/dashboard/sponsors/vmu.png" alt="Advertisement" />
+              </div>
+              <div class="ad-slot">
+                <img src="/dashboard/sponsors/lg.png" alt="Advertisement" />
+              </div>
+              <div class="ad-slot">
+                <img src="/dashboard/sponsors/fit.png" alt="Advertisement" />
+              </div>
+            </div>
+          </div>
+
+
+          <div class="players-section" v-if="currentGame.players">
+            <h2>Leaderboard</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>Team</th>
+                  <th>Energy</th>
+                  <th>Score</th>
+                  <th>Traps</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="player in sortedPlayers" 
+                    :key="player.code"
+                    :class="{ 'score-updated': recentScoreUpdates.includes(player.code) }"
+                    class="player-row">
+                  <td>
+                    <span class="player-badge" :style="{ backgroundColor: getPlayerColor(player) }">
+                      {{ player.teamName || player.name || player.code }}
+                    </span>
+                  </td>
+                  <td>
+                    <div class="energy-bar-container">
+                      <div class="energy-bar" :style="getEnergyBarStyle(player.energy)">
+                        <span class="energy-text">{{ player.energy }}</span>
+                      </div>
+                    </div>
+                  </td>
+                  <td class="score-cell">{{ player.score || 0 }}</td>
+                  <td>{{ player.trapCount || 0 }}/{{ MAX_TRAPS }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
           <div class="info-grid">
         <div class="info-card">
           <h3>Status</h3>
@@ -80,34 +133,6 @@
         </div>
           </div>
 
-          <div class="players-section" v-if="currentGame.players">
-            <h2>Leaderboard</h2>
-            <table>
-              <thead>
-                <tr>
-                  <th>Team</th>
-                  <th>Position</th>
-                  <th>Energy</th>
-                  <th>Score</th>
-                  <th>Traps</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="(player, index) in sortedPlayers" :key="player.code">
-                  <td>
-                    <span class="player-badge" :style="{ backgroundColor: getPlayerColor(index) }">
-                      {{ player.teamName || player.name || player.code }}
-                    </span>
-                  </td>
-                  <td>({{ player.position?.x }}, {{ player.position?.y }})</td>
-                  <td>{{ player.energy }}</td>
-                  <td class="score-cell">{{ player.score || 0 }}</td>
-                  <td>{{ player.trapCount || 0 }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
           <div class="socket-status">
             <h3>Real-time Updates</h3>
             <p :class="{ 'connected': socketConnected, 'disconnected': !socketConnected }">
@@ -122,7 +147,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useGameStore } from '../stores/game'
 import { usePlayerStore } from '../stores/players'
@@ -139,6 +164,7 @@ const isActive = ref(false)
 const timeRemaining = ref<number>(0)
 const countdownInterval = ref<number | null>(null)
 const countdownStartTime = ref<number>(0) // Track khi bắt đầu countdown
+const recentScoreUpdates = ref<string[]>([])
 
 const currentGame = computed(() => gameStore.currentGame)
 const loading = computed(() => gameStore.loading)
@@ -197,13 +223,77 @@ const { socket, connected: socketConnected } = useGameSocket(gameId, gameStore, 
 // Player colors: Đỏ, Xanh lá, Xanh nước biển, Tím
 const PLAYER_COLORS = ['#ef4444', '#22c55e', '#3b82f6', '#a855f7']
 
-const getPlayerColor = (index: number): string => {
+const getPlayerColor = (player: any): string => {
+  // Use originalIndex to maintain consistent colors even when sorted
+  const index = player.originalIndex ?? 0
   return PLAYER_COLORS[index % PLAYER_COLORS.length]!
 }
 
+// ✅ ENHANCED: Get energy bar color gradient (red -> yellow -> green)
+const getEnergyColor = (energy: number, maxEnergy: number = 100): string => {
+  const percentage = Math.min(100, Math.max(0, (energy / maxEnergy) * 100))
+  
+  if (percentage < 33) {
+    // Đỏ (0-33%)
+    return '#ef4444'
+  } else if (percentage < 66) {
+    // Vàng (33-66%)
+    return '#eab308'
+  } else {
+    // Xanh lá (66-100%)
+    return '#22c55e'
+  }
+}
+
+const getEnergyBarStyle = (energy: number, maxEnergy: number = 100): any => {
+  const percentage = Math.min(100, Math.max(0, (energy / maxEnergy) * 100))
+  const color = getEnergyColor(energy, maxEnergy)
+  
+  return {
+    width: `${percentage}%`,
+    backgroundColor: color,
+    transition: 'all 0.3s ease'
+  }
+}
+
+const MAX_TRAPS = 5 // Matching backend MAX_TRAPS_PER_PLAYER
+
 const sortedPlayers = computed(() => {
   if (!currentGame.value?.players) return []
-  return [...currentGame.value.players].sort((a, b) => (b.score || 0) - (a.score || 0))
+  
+  // Build player map from global players store by playerId and code
+  const playersById: Record<string, any> = {}
+  const playersByCode: Record<string, any> = {}
+  for (const gp of playerStore.players || []) {
+    if (gp._id) playersById[gp._id] = gp
+    if (gp.code) playersByCode[gp.code] = gp
+  }
+  
+  const result = [...currentGame.value.players]
+    .map((p: any, originalIndex: number) => {
+      // Try to find global player info by playerId or code
+      const globalPlayer = playersById[p.playerId] || playersByCode[p.code]
+      
+      // ✅ ENHANCED: Prefer code as display name for leaderboard
+      const displayName = p.code || p.teamName || globalPlayer?.teamName || globalPlayer?.name || p.name || p.playerId
+      
+      const enriched = {
+        ...p,
+        // ✅ ENHANCED: Preserve original index for consistent color assignment
+        originalIndex,
+        // Use code as primary display (team identifier)
+        teamName: p.code,
+        // Keep original name for detail
+        name: p.name || globalPlayer?.name || displayName,
+        // Ensure code is always present
+        code: p.code || p.playerId
+      }
+      
+      return enriched
+    })
+    .sort((a, b) => (b.score || 0) - (a.score || 0))
+  
+  return result
 })
 
 // Leaderboard data when game finished: prefer finalScores from server
@@ -212,8 +302,10 @@ const finishedLeaderboard = computed(() => {
   if (finalScores.length) {
     // Enrich with player code if available
     const playersById: Record<string, any> = {}
-    for (const p of currentGame.value?.players || []) {
+    const playerOriginalIndex: Record<string, number> = {}
+    for (const [idx, p] of (currentGame.value?.players || []).entries()) {
       playersById[p.playerId] = p
+      playerOriginalIndex[p.playerId] = idx
     }
     // Also enrich from global players store (may have names/teamName)
     const globalByCode: Record<string, any> = {}
@@ -226,6 +318,7 @@ const finishedLeaderboard = computed(() => {
         playerId: s.playerId,
         score: s.score,
         code: playersById[s.playerId]?.code || s.playerId,
+        originalIndex: playerOriginalIndex[s.playerId] ?? 0,
         name:
           playersById[s.playerId]?.teamName ||
           playersById[s.playerId]?.name ||
@@ -241,13 +334,14 @@ const finishedLeaderboard = computed(() => {
     globalByCode[gp.code] = gp
   }
   return (currentGame.value?.players || [])
-    .map(p => ({
+    .map((p: any, originalIndex: number) => ({
       playerId: p.playerId,
       score: p.score || 0,
       code: p.code,
+      originalIndex,
       name: p.teamName || p.name || globalByCode[p.code]?.teamName || globalByCode[p.code]?.name
     }))
-    .sort((a, b) => b.score - a.score)
+    .sort((a: any, b: any) => b.score - a.score)
 })
 
 let tickListener: ((data: any) => void) | null = null
@@ -310,6 +404,16 @@ const handleReset = async () => {
 
 onMounted(() => {
   fetchState()
+  
+  // Sync isActive with game status when it changes to finished
+  watch(() => currentGame.value?.status, (newStatus) => {
+    if (newStatus === 'finished') {
+      isActive.value = false
+      stopCountdown()
+      console.log('🏁 Game status changed to finished, stopping countdown and disabling active state')
+    }
+  })
+  
   // Attach tick complete listener to refresh full state
   tickListener = (data: any) => {
     if (!data || data.gameId !== gameId) return
@@ -321,7 +425,30 @@ onMounted(() => {
     // Optionally could trigger periodic full sync every N ticks
   }
   socket.value?.on('game:tick:complete', tickListener)
+  
+  // ✅ ENHANCED: Watch for score changes to trigger animation (uses correct event name)
+  socket.value?.on('player:score:changed', (data: any) => {
+    if (data?.playerId) {
+      // Find player code from playerId
+      const player = currentGame.value?.players?.find((p: any) => 
+        p.playerId === data.playerId || p.code === data.playerId
+      )
+      const playerCode = player?.code || data.playerId
+      
+      recentScoreUpdates.value.push(playerCode)
+      lastUpdate.value = new Date().toLocaleTimeString()
+      
+      // Remove after animation
+      setTimeout(() => {
+        const idx = recentScoreUpdates.value.indexOf(playerCode)
+        if (idx > -1) {
+          recentScoreUpdates.value.splice(idx, 1)
+        }
+      }, 1500)
+    }
+  })
 })
+
 
 onUnmounted(() => {
   if (tickListener) {
@@ -333,7 +460,15 @@ onUnmounted(() => {
 
 <style scoped>
 .game-control {
-  padding: 20px;
+  padding: 15px;
+  max-width: 100%;
+  margin: 0 auto;
+}
+
+.game-state {
+  height: 95vh;
+  display: flex;
+  flex-direction: column;
 }
 
 .actions {
@@ -341,6 +476,7 @@ onUnmounted(() => {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+  flex-shrink: 0;
 }
 
 .btn {
@@ -448,26 +584,26 @@ onUnmounted(() => {
 
 .info-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 20px;
-  margin: 20px 0;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin: 15px 0;
 }
 
 .info-card {
   background: #f5f5f5;
-  padding: 20px;
-  border-radius: 8px;
+  padding: 8px;
+  border-radius: 6px;
   text-align: center;
 }
 
 .info-card h3 {
-  margin: 0 0 10px 0;
-  font-size: 14px;
+  margin: 0 0 3px 0;
+  font-size: 10px;
   color: #666;
 }
 
 .info-card p {
-  font-size: 24px;
+  font-size: 14px;
   font-weight: bold;
   margin: 0;
 }
@@ -498,95 +634,282 @@ onUnmounted(() => {
   display: flex;
   gap: 20px;
   margin-top: 20px;
+  flex: 1;
+  min-height: 0;
 }
 
 .map-section {
-  flex: 0 0 auto;
-  max-width: calc(100vh - 250px);
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-height: 95vh;
+  position: relative;
+}
+
+/* Keep map area square by constraining to the smaller of available width/height */
+.map-section::before {
+  content: '';
+  display: block;
+  padding-top: 100%;
   width: 100%;
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.map-section > * {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: min(100%, 100vh);
+  height: min(100%, 100vh);
 }
 
 .info-sidebar {
-  flex: 1;
-  min-width: 300px;
-  max-width: 400px;
+  flex: 0 0 auto;
+  min-width: 250px;
+  max-width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sponsors-section {
+  margin-bottom: 12px;
+  background: #f9fafb;
+  padding: 10px;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sponsors-section h3 {
+  margin: 0 0 6px 0;
+  font-size: 12px;
+  color: #374151;
+  text-align: center;
+}
+
+.ad-slot {
+  position: relative;
+  background: white;
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  width: 100%;
+  padding-top: 100%; /* square ratio */
+}
+
+.ad-slot img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  padding: 10px
+}
+
+.sponsors-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(90px, 1fr));
+  gap: 8px;
 }
 
 .info-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 15px;
-  margin-bottom: 20px;
+  gap: 8px;
+  margin-bottom: 12px;
 }
 
 .players-section {
-  margin-top: 20px;
+  margin-top: 12px;
+  background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%);
+  border-radius: 8px;
+  padding: 12px;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.15);
 }
 
 .players-section h2 {
   margin-top: 0;
-  margin-bottom: 15px;
-  font-size: 18px;
+  margin-bottom: 10px;
+  font-size: 16px;
+  font-weight: bold;
+  color: white;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
 
 table {
   width: 100%;
   border-collapse: collapse;
   margin-top: 10px;
-  font-size: 14px;
+  font-size: 12px;
+  background: white;
+  border-radius: 6px;
+  overflow: hidden;
 }
 
 th, td {
   padding: 10px 8px;
   text-align: left;
-  border-bottom: 1px solid #ddd;
+  border-bottom: 1px solid #e5e7eb;
+  vertical-align: middle;
 }
 
 th {
-  background: #f5f5f5;
-  font-weight: 600;
+  background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%);
+  font-weight: 700;
+  color: white;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+tr:hover {
+  background: #f0f9ff;
+}
+
+tr:last-child td {
+  border-bottom: none;
+}
+
+/* ✅ ENHANCED: Energy bar styling */
+.energy-bar-container {
+  width: 100%;
+  height: 24px;
+  background: #e5e7eb;
+  border-radius: 4px;
+  overflow: hidden;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.1);
+}
+
+.energy-bar {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  min-width: 24px;
+}
+
+.energy-text {
+  color: white;
+  font-weight: bold;
+  font-size: 11px;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+  user-select: none;
+}tr {
+  margin: 0;
+  padding: 0;
+}
+
+tbody tr {
+  border-spacing: 0;
 }
 
 .player-badge {
   display: inline-block;
-  padding: 4px 12px;
+  width: 100px;
+  min-height: 28px;
+  padding: 6px 10px;
   border-radius: 12px;
   color: white;
   font-weight: bold;
-  font-size: 13px;
+  font-size: 11px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  white-space: normal;
+  word-wrap: break-word;
+  line-height: 1.3;
+  text-align: center;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .score-cell {
   font-weight: bold;
-  font-size: 16px;
+  font-size: 14px;
+  color: #1e40af;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.1);
 }
 
 .socket-status {
-  margin-top: 20px;
-  padding: 15px;
+  margin-top: 12px;
+  padding: 10px;
   background: #f5f5f5;
-  border-radius: 8px;
+  border-radius: 6px;
 }
 
 .socket-status h3 {
   margin-top: 0;
-  margin-bottom: 10px;
-  font-size: 16px;
+  margin-bottom: 6px;
+  font-size: 13px;
 }
 
 .connected {
   color: #22c55e;
   font-weight: 600;
+  font-size: 11px;
 }
 
 .disconnected {
   color: #ef4444;
   font-weight: 600;
+  font-size: 11px;
 }
 
 .last-update {
-  font-size: 12px;
+  font-size: 10px;
   color: #666;
-  margin-top: 5px;
+  margin-top: 4px;
+}
+
+@keyframes scoreHighlight {
+  0% {
+    background: #fbbf24;
+    transform: translateY(-2px);
+  }
+  50% {
+    background: #fcd34d;
+    transform: translateY(0);
+  }
+  100% {
+    background: transparent;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scoreMove {
+  0% {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.player-row {
+  transition: all 0.3s ease;
+}
+
+.player-row.score-updated {
+  animation: scoreMove 0.6s ease-out, scoreHighlight 0.8s ease-out;
+}
+
+.player-row.score-updated .score-cell {
+  animation: scoreHighlight 0.8s ease-out;
+  font-size: 16px !important;
 }
 </style>

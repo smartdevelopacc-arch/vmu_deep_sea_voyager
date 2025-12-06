@@ -177,11 +177,18 @@ const processTick = async (gameId) => {
         gameState.actionQueue.sort((a, b) => a.timestamp - b.timestamp);
         const actions = [...gameState.actionQueue];
         gameState.actionQueue = []; // Clear queue
+        // Track players bị đâm về base để huỷ action tiếp theo
+        const playersRammedThisTick = new Set();
         // Track players có action trong turn này
         const playersWithActions = new Set();
         actions.forEach(action => {
+            // Skip action nếu player đã bị đâm về base trong tick này
+            if (playersRammedThisTick.has(action.playerId)) {
+                console.log(`⚠️ Player ${action.playerId} was rammed this tick - skipping remaining actions`);
+                return;
+            }
             playersWithActions.add(action.playerId);
-            processAction(gameState, action);
+            processAction(gameState, action, playersRammedThisTick);
         });
         // BƯỚC 3.5: Hồi năng lượng cho players KHÔNG có action (tự động nghỉ)
         gameState.players.forEach((player, playerId) => {
@@ -217,29 +224,16 @@ exports.queueAction = queueAction;
 /**
  * Xử lý từng action
  */
-const processAction = (gameState, action) => {
+const processAction = (gameState, action, playersRammedThisTick) => {
     const player = gameState.players.get(action.playerId);
     if (!player)
         return;
     switch (action.type) {
         case 'move':
-            processMove(gameState, player, action.data);
+            processMove(gameState, player, action.data, playersRammedThisTick);
             break;
         case 'trap':
             processTrap(gameState, player, action.data);
-            break;
-        case 'rest':
-            processRest(gameState, player);
-            break;
-        case 'pick-treasure':
-            // Deprecated: Treasure is now auto-collected on move
-            console.log(`⚠️  pick-treasure action is deprecated - treasure auto-collected on move`);
-            processPickTreasure(gameState, player);
-            break;
-        case 'drop-treasure':
-            // Deprecated: Treasure is now auto-dropped when reaching base
-            console.log(`⚠️  drop-treasure action is deprecated - treasure auto-dropped at base`);
-            processDropTreasure(gameState, player);
             break;
     }
 };
@@ -256,7 +250,7 @@ const processAction = (gameState, action) => {
  * 7. AUTO-DROP treasure and score points if reached base
  * 8. Restore energy if at base
  */
-const processMove = (gameState, player, data) => {
+const processMove = (gameState, player, data, playersRammedThisTick) => {
     const { target } = data;
     // Kiểm tra vị trí hợp lệ
     if (!isValidPosition(gameState.map, target)) {
@@ -264,6 +258,11 @@ const processMove = (gameState, player, data) => {
     }
     // Kiểm tra địa hình (đảo/đá ngầm) với validation
     if (gameState.map.terrain?.[target.y]?.[target.x] === -1) {
+        return;
+    }
+    // Kiểm tra không được di chuyển vào base của đối thủ
+    if (isEnemyBase(gameState, target, player.playerId)) {
+        console.log(`🚫 Player ${player.playerId} cannot move to enemy base at (${target.x}, ${target.y})`);
         return;
     }
     // Tính chi phí năng lượng với validation
@@ -275,7 +274,14 @@ const processMove = (gameState, player, data) => {
     const conflictPlayer = findPlayerAtPosition(gameState, target);
     if (conflictPlayer && conflictPlayer.playerId !== player.playerId) {
         // Va chạm: player chủ động, conflictPlayer bị động
-        handleCollision(gameState, player, conflictPlayer);
+        handleCollision(gameState, player, conflictPlayer, playersRammedThisTick);
+        // Attacker chiếm lấy vị trí của victim (sau khi victim bị đá về base)
+        player.position = { ...target };
+        player.energy -= waveCost;
+        player.isAtBase = isAtBase(gameState.map, target);
+        console.log(`🏃 Player ${player.playerId} occupied position (${target.x}, ${target.y}) after ramming`);
+        (0, socketEvents_1.emitPlayerMove)(gameState.gameId, player.playerId, player.position);
+        (0, socketEvents_1.emitEnergyUpdate)(gameState.gameId, player.playerId, player.energy);
         return;
     }
     // Di chuyển thành công
@@ -333,20 +339,39 @@ const processTrap = (gameState, player, data) => {
     if (!canPlaceTrap(gameState, position, player.playerId)) {
         return;
     }
+    // Nếu đã có bẫy của chính player ở ô này, chỉ cập nhật danger/createdAt, không tăng count
+    const trapKey = `${position.x},${position.y}`;
+    const existingTrap = gameState.map.traps.get(trapKey);
+    if (existingTrap && existingTrap.playerId === player.playerId) {
+        gameState.map.traps.set(trapKey, {
+            playerId: player.playerId,
+            position,
+            danger,
+            createdAt: Date.now()
+        });
+        console.log(`🪤 Trap refreshed at (${position.x}, ${position.y}) by ${player.playerId}, danger=${danger}`);
+        (0, socketEvents_1.emitTrapPlaced)(gameState.gameId, player.playerId, position, danger);
+        return;
+    }
+    // Đếm bẫy hiện có của player để enforce cứng theo board thực tế
+    const activeTrapCount = countTrapsForPlayer(gameState, player.playerId);
+    if (activeTrapCount >= MAX_TRAPS_PER_PLAYER) {
+        removeOldestTrap(gameState, player.playerId);
+    }
     // Xóa bẫy cũ nếu vượt quá giới hạn
     if (player.trapCount >= MAX_TRAPS_PER_PLAYER) {
         removeOldestTrap(gameState, player.playerId);
     }
-    // Đặt bẫy
-    const trapKey = `${position.x},${position.y}`;
+    // Đặt bẫy mới
     gameState.map.traps.set(trapKey, {
         playerId: player.playerId,
         position,
-        danger
+        danger,
+        createdAt: Date.now() // Track when trap was placed
     });
     console.log(`🪤 Trap placed at (${position.x}, ${position.y}) by ${player.playerId}, danger=${danger}`);
     console.log(`🪤 Total traps in game: ${gameState.map.traps.size}`);
-    player.trapCount++;
+    player.trapCount = countTrapsForPlayer(gameState, player.playerId);
     player.energy -= danger;
     (0, socketEvents_1.emitTrapPlaced)(gameState.gameId, player.playerId, position, danger);
     (0, socketEvents_1.emitEnergyUpdate)(gameState.gameId, player.playerId, player.energy);
@@ -359,40 +384,32 @@ const processRest = (gameState, player) => {
     (0, socketEvents_1.emitEnergyUpdate)(gameState.gameId, player.playerId, player.energy);
 };
 /**
- * Xử lý thu thập kho báu
- */
-const processPickTreasure = (gameState, player) => {
-    const { x, y } = player.position;
-    const treasureValue = gameState.map.treasures[y][x];
-    if (treasureValue > 0 && !player.carriedTreasure) {
-        player.carriedTreasure = treasureValue;
-        gameState.map.treasures[y][x] = 0;
-        (0, socketEvents_1.emitTreasureCollected)(gameState.gameId, player.playerId, treasureValue, { x, y });
-    }
-};
-/**
- * Xử lý dỡ kho báu về căn cứ
- */
-const processDropTreasure = (gameState, player) => {
-    if (player.carriedTreasure && player.isAtBase) {
-        player.score += player.carriedTreasure;
-        player.carriedTreasure = undefined;
-        (0, socketEvents_1.emitScoreUpdate)(gameState.gameId, player.playerId, player.score);
-    }
-};
-/**
  * Xử lý va chạm
  */
-const handleCollision = (gameState, attacker, victim) => {
-    // Nạn nhân về căn cứ
-    const baseIndex = Array.from(gameState.players.values()).findIndex(p => p.playerId === victim.playerId);
+const handleCollision = (gameState, attacker, victim, playersRammedThisTick) => {
+    const victimPosition = { ...victim.position };
+    // Nạn nhân về căn cứ - sử dụng baseIndex từ victim state
+    const baseIndex = victim.baseIndex ?? 0; // Default to 0 if not set
     victim.position = { ...gameState.map.bases[baseIndex] };
     victim.energy = MAX_ENERGY;
     victim.isAtBase = true;
-    // Chuyển kho báu sang kẻ tấn công
-    if (victim.carriedTreasure) {
-        attacker.carriedTreasure = victim.carriedTreasure;
-        victim.carriedTreasure = undefined;
+    // Mark victim as rammed to cancel remaining actions this tick
+    playersRammedThisTick.add(victim.playerId);
+    console.log(`⚠️ Player ${victim.playerId} rammed back to base at (${victim.position.x}, ${victim.position.y}) - remaining actions this tick will be skipped`);
+    // Xử lý kho báu của nạn nhân - rơi tại vị trí va chạm (KHÔNG được cộng điểm)
+    if (victim.carriedTreasure && victim.carriedTreasure > 0) {
+        const treasureValue = victim.carriedTreasure;
+        // Nạn nhân mất treasure (không được cộng điểm)
+        console.log(`💎 Player ${victim.playerId} lost treasure (${treasureValue}) due to collision at (${victimPosition.x}, ${victimPosition.y})`);
+        // Treasure được chuyển cho attacker
+        attacker.carriedTreasure = (attacker.carriedTreasure || 0) + treasureValue;
+        console.log(`🎁 Player ${attacker.playerId} received treasure ${treasureValue}. Now carrying: ${attacker.carriedTreasure}`);
+        // Clear victim's treasure
+        victim.carriedTreasure = 0;
+        // Notify UI about treasure change for both players
+        const { emitPlayerTreasureUpdate } = require('./socketEvents');
+        emitPlayerTreasureUpdate(gameState.gameId, victim.playerId, 0);
+        emitPlayerTreasureUpdate(gameState.gameId, attacker.playerId, attacker.carriedTreasure);
     }
     (0, socketEvents_1.emitCollision)(gameState.gameId, attacker.playerId, victim.playerId);
     (0, socketEvents_1.emitPlayerMove)(gameState.gameId, victim.playerId, victim.position);
@@ -407,6 +424,13 @@ const checkTrap = (gameState, player, position) => {
         const waveCost = gameState.map.waves[position.y][position.x] || 1;
         player.energy = Math.max(0, player.energy - trap.danger - waveCost);
         gameState.map.traps.delete(trapKey);
+        // thông báo UI gỡ bẫy
+        (0, socketEvents_1.emitTrapRemoved)(gameState.gameId, position);
+        // Keep owner trap count in sync when a trap is consumed
+        const owner = gameState.players.get(trap.playerId);
+        if (owner) {
+            owner.trapCount = countTrapsForPlayer(gameState, trap.playerId);
+        }
         (0, socketEvents_1.emitEnergyUpdate)(gameState.gameId, player.playerId, player.energy);
     }
 };
@@ -522,7 +546,30 @@ const isValidPosition = (map, pos) => {
     return pos.x >= 0 && pos.x < map.width && pos.y >= 0 && pos.y < map.height;
 };
 const isAtBase = (map, pos) => {
-    return map.bases.some(base => base.x === pos.x && base.y === pos.y);
+    return map.bases.some(base => {
+        const bx = Array.isArray(base) ? base[0] : base.x;
+        const by = Array.isArray(base) ? base[1] : base.y;
+        return bx === pos.x && by === pos.y;
+    });
+};
+/**
+ * Kiểm tra xem vị trí có phải base của một player khác không
+ */
+const isEnemyBase = (gameState, pos, currentPlayerId) => {
+    for (const [playerId, player] of gameState.players) {
+        if (playerId === currentPlayerId)
+            continue;
+        const baseIndex = player.baseIndex ?? 0;
+        if (baseIndex >= gameState.map.bases.length)
+            continue;
+        const base = gameState.map.bases[baseIndex];
+        const bx = Array.isArray(base) ? base[0] : base.x;
+        const by = Array.isArray(base) ? base[1] : base.y;
+        if (bx === pos.x && by === pos.y) {
+            return true;
+        }
+    }
+    return false;
 };
 const isAdjacent = (pos1, pos2) => {
     return Math.abs(pos1.x - pos2.x) <= 1 && Math.abs(pos1.y - pos2.y) <= 1;
@@ -544,12 +591,38 @@ const findPlayerAtPosition = (gameState, pos) => {
     return Array.from(gameState.players.values()).find(p => p.position.x === pos.x && p.position.y === pos.y);
 };
 const removeOldestTrap = (gameState, playerId) => {
+    let oldestKey = null;
+    let oldestTime = Infinity;
+    // Tìm trap cũ nhất của player này
     for (const [key, trap] of gameState.map.traps.entries()) {
-        if (trap.playerId === playerId) {
-            gameState.map.traps.delete(key);
-            break;
+        if (trap.playerId === playerId && trap.createdAt < oldestTime) {
+            oldestTime = trap.createdAt;
+            oldestKey = key;
         }
     }
+    if (oldestKey) {
+        const trap = gameState.map.traps.get(oldestKey);
+        console.log(`🎫 Removing oldest trap at (${trap?.position.x}, ${trap?.position.y}) for ${playerId}`);
+        gameState.map.traps.delete(oldestKey);
+        if (trap?.position) {
+            (0, socketEvents_1.emitTrapRemoved)(gameState.gameId, trap.position);
+        }
+        // Keep trapCount aligned with active traps on the board
+        const owner = gameState.players.get(playerId);
+        if (owner) {
+            owner.trapCount = countTrapsForPlayer(gameState, playerId);
+        }
+    }
+};
+// Đếm số bẫy hiện có của một player trên board
+const countTrapsForPlayer = (gameState, playerId) => {
+    let count = 0;
+    for (const trap of gameState.map.traps.values()) {
+        if (trap.playerId === playerId) {
+            count++;
+        }
+    }
+    return count;
 };
 const getScores = (gameState) => {
     return Array.from(gameState.players.values()).map(p => ({

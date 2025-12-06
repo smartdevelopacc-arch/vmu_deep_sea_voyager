@@ -26,7 +26,7 @@
           >
             <!-- Hiển thị player với background màu -->
             <div v-if="getPlayerAtPosition(x, y)" class="player-indicator"
-                 :style="{ backgroundColor: getPlayerColor(getPlayerAtPosition(x, y)!.playerId || getPlayerAtPosition(x, y)!.code) }">
+                 :style="getPlayerIndicatorStyle(getPlayerAtPosition(x, y)!, x, y)">
               <span class="player-icon">⛵</span>
               <!-- Treasure badge nhấp nháy với giá trị nếu player đang mang treasure -->
               <span v-if="getPlayerAtPosition(x, y)!.carriedTreasure && getPlayerAtPosition(x, y)!.carriedTreasure > 0" 
@@ -37,7 +37,7 @@
             </div>
             <!-- Hiển thị trap với màu theo player -->
             <div v-else-if="getTrapInfo(x, y)" class="trap-indicator" 
-                 :style="{ backgroundColor: getPlayerColor(getTrapInfo(x, y)!.playerId) }">
+                 :style="{ borderBottomColor: getPlayerColor(getTrapInfo(x, y)!.playerId) }">
               <span class="trap-emoji">🪤</span>
               <span class="trap-danger">{{ getTrapInfo(x, y)!.danger }}</span>
             </div>
@@ -99,11 +99,51 @@ const customIcons = ref({
 const PLAYER_COLORS = ['#ef4444', '#22c55e', '#3b82f6', '#a855f7']
 
 const getPlayerColor = (playerId: string) => {
+  if (!playerId) return '#666'
+  
+  // Handle player_N format (for traps)
+  const match = playerId.match(/player_(\d+)/)
+  if (match && match[1]) {
+    const index = parseInt(match[1])
+    return PLAYER_COLORS[index % PLAYER_COLORS.length]!
+  }
+  
+  // Handle regular playerId/code lookup
   if (!props.players) return '#666'
   const index = props.players.findIndex((p: any) => 
     (p.code === playerId) || (p.playerId === playerId)
   )
   return index >= 0 ? PLAYER_COLORS[index % PLAYER_COLORS.length]! : '#666'
+}
+
+/**
+ * Get player indicator style - show base color as border if player is at base
+ */
+const getPlayerIndicatorStyle = (player: any, x: number, y: number) => {
+  const playerColor = getPlayerColor(player.playerId || player.code)
+  const style: any = {
+    backgroundColor: playerColor
+  }
+  
+  // If player is at base, add thick border with base color tint
+  if (props.mapData?.bases && props.players) {
+    const baseIndex = props.mapData.bases.findIndex((b: any) => {
+      const bx = Array.isArray(b) ? b[0] : b.x
+      const by = Array.isArray(b) ? b[1] : b.y
+      return bx === x && by === y
+    })
+    
+    if (baseIndex >= 0 && baseIndex < props.players.length) {
+      // Player is at their base - add thick border
+      const r = parseInt(playerColor.slice(1, 3), 16)
+      const g = parseInt(playerColor.slice(3, 5), 16)
+      const b = parseInt(playerColor.slice(5, 7), 16)
+      style.border = `3px solid rgba(${r}, ${g}, ${b}, 0.8)`
+      style.boxShadow = `inset 0 0 8px rgba(${r}, ${g}, ${b}, 0.6)`
+    }
+  }
+  
+  return style
 }
 
 const getPlayerAtPosition = (x: number, y: number): any | null => {
@@ -276,7 +316,7 @@ const getCellIcon = (x: number, y: number): string | undefined => {
       const py = p.position?.y ?? (Array.isArray(p.position) ? p.position[1] : null)
       return px === x && py === y
     })
-    if (player && customIcons.value.player) return '/icons/player.png'
+    if (player && customIcons.value.player) return '/dashboard/icons/player.png'
   }
 
   // Base (only if no player icon already chosen)
@@ -286,7 +326,7 @@ const getCellIcon = (x: number, y: number): string | undefined => {
       const by = Array.isArray(b) ? b[1] : b.y
       return bx === x && by === y
     })
-    if (isBase && customIcons.value.base) return '/icons/base.png'
+    if (isBase && customIcons.value.base) return '/dashboard/icons/base.png'
   }
   
   // Check traps
@@ -301,16 +341,16 @@ const getCellIcon = (x: number, y: number): string | undefined => {
       const ty = t.position?.y ?? (Array.isArray(t.position) ? t.position[1] : (Array.isArray(t) ? t[1] : null))
       return tx === x && ty === y
     })
-    if (trap && customIcons.value.trap) return '/icons/trap.png'
+    if (trap && customIcons.value.trap) return '/dashboard/icons/trap.png'
   }
   
   // Check treasure
   const treasure = props.mapData?.treasures?.[y]?.[x]
-  if (treasure && treasure > 0 && customIcons.value.treasure) return '/icons/treasure.png'
+  if (treasure && treasure > 0 && customIcons.value.treasure) return '/dashboard/icons/treasure.png'
   
   // Check island (terrain -1)
   const terrain = props.mapData?.terrain || props.mapData?.obstacles
-  if (terrain?.[y]?.[x] === -1 && customIcons.value.island) return '/icons/island.png'
+  if (terrain?.[y]?.[x] === -1 && customIcons.value.island) return '/dashboard/icons/island.png'
   
   return undefined
 }
@@ -338,6 +378,8 @@ const getCellTitle = (x: number, y: number) => {
 <style scoped>
 .map-viewer {
   width: 100%;
+  height: 100%;
+  align-self: flex-start;
 }
 
 .empty {
@@ -348,18 +390,22 @@ const getCellTitle = (x: number, y: number) => {
 
 .map-container {
   background: white;
-  padding: 20px;
+  padding: 10px;
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .map-info {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 15px;
-  font-size: 14px;
+  margin-bottom: 8px;
+  font-size: 12px;
   color: #666;
   font-weight: 600;
+  flex-shrink: 0;
 }
 
 .map-grid {
@@ -367,10 +413,15 @@ const getCellTitle = (x: number, y: number) => {
   gap: 1px;
   background: #ddd;
   border: 2px solid #999;
-  aspect-ratio: 1;
+  aspect-ratio: 1 / 1;
+  width: 100%;
+  height: 100%;
+  max-height: 100%;
   max-width: 100%;
-  max-height: calc(100vh - 200px);
   margin: 0 auto;
+  overflow: hidden;
+  box-sizing: border-box;
+  flex: 1;
 }
 
 .map-row {
@@ -378,7 +429,9 @@ const getCellTitle = (x: number, y: number) => {
 }
 
 .map-cell {
-  aspect-ratio: 1;
+  aspect-ratio: 1 / 1;
+  min-width: 0;
+  min-height: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -386,17 +439,18 @@ const getCellTitle = (x: number, y: number) => {
   position: relative;
   cursor: pointer;
   transition: transform 0.1s;
-  font-size: clamp(10px, 1.5vw, 20px);
+  font-size: clamp(8px, 0.8vw, 16px);
+  overflow: hidden;
 }
 
 .map-cell:hover {
-  transform: scale(1.1);
+  transform: scale(1.05);
   z-index: 10;
   box-shadow: 0 0 8px rgba(0,0,0,0.3);
 }
 
 .cell-content {
-  font-size: 2em;
+  font-size: 1.2em;
   line-height: 1;
   display: flex;
   align-items: center;
@@ -411,19 +465,19 @@ const getCellTitle = (x: number, y: number) => {
 }
 
 .player-indicator {
-  width: 85%;
-  height: 85%;
+  width: 80%;
+  height: 80%;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   box-shadow: 0 2px 6px rgba(0,0,0,0.4);
-  border: 2px solid rgba(255,255,255,0.3);
+  border: 1px solid rgba(255,255,255,0.3);
   position: relative;
 }
 
 .player-icon {
-  font-size: 1.5em;
+  font-size: 1.1em;
   line-height: 1;
   filter: drop-shadow(0 1px 2px rgba(0,0,0,0.3));
 }
@@ -442,7 +496,7 @@ const getCellTitle = (x: number, y: number) => {
 }
 
 .treasure-badge-icon {
-  font-size: 1.2em;
+  font-size: 0.9em;
   line-height: 1;
 }
 
@@ -472,31 +526,43 @@ const getCellTitle = (x: number, y: number) => {
 }
 
 .trap-indicator {
-  width: 80%;
-  height: 80%;
-  border-radius: 50%;
+  width: 0;
+  height: 0;
+  border-left: 1.5em solid transparent;
+  border-right: 1.5em solid transparent;
+  border-bottom: 2.5em solid;
+  position: relative;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  color: white;
-  font-weight: bold;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-  position: relative;
+  margin: 5% auto 0;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
 }
 
 .trap-emoji {
-  font-size: 1.2em;
+  position: absolute;
+  top: 1em;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 1em;
   line-height: 1;
+  color: white;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5));
 }
 
 .trap-danger {
-  font-size: 0.7em;
   position: absolute;
-  bottom: 2px;
-  background: rgba(0,0,0,0.6);
-  border-radius: 8px;
-  padding: 1px 4px;
+  top: 2.7em;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.7em;
+  background: rgba(0,0,0,0.9);
+  color: white;
+  border-radius: 6px;
+  padding: 2px 5px;
+  font-weight: bold;
+  white-space: nowrap;
+  border: 1px solid rgba(255,255,255,0.3);
 }
 
 .treasure-container {
@@ -508,19 +574,24 @@ const getCellTitle = (x: number, y: number) => {
   height: 100%;
 }
 
+.treasure-container .cell-content {
+  font-size: 2.2em;
+}
+
 .treasure-value {
   position: absolute;
   bottom: 2px;
-  right: 2px;
-  font-size: 0.65em;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: max(0.6rem, 8%);
   font-weight: bold;
   color: white;
   background: linear-gradient(135deg, #fbbf24, #f59e0b);
   border-radius: 6px;
-  padding: 2px 5px;
+  padding: 1px 1px;
   box-shadow: 0 2px 4px rgba(0,0,0,0.3);
   border: 1px solid rgba(255,255,255,0.3);
-  min-width: 20px;
+  min-width: 15px;
   text-align: center;
 }
 

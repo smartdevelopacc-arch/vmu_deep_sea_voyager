@@ -8,6 +8,7 @@ exports.PlayerSchema = new mongoose_1.Schema({
     name: { type: String, required: true },
     logo: { type: String, required: false },
     slogan: { type: String, required: false },
+    secret: { type: String, required: false }, // ✅ NEW: Player secret for authentication
     score: { type: Number, required: false, default: 0 },
     energy: { type: Number, required: false, default: 100 },
     position: {

@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.dropTreasure = exports.pickTreasure = exports.rest = exports.trap = exports.move = void 0;
+exports.rest = exports.trap = exports.move = void 0;
 const playerAction_model_1 = require("../models/playerAction.model");
 const game_model_1 = require("../models/game.model");
 /**
@@ -123,47 +123,3 @@ const rest = async (req, res) => {
     }
 };
 exports.rest = rest;
-const pickTreasure = async (req, res) => {
-    try {
-        const { gameId, playerId } = req.params;
-        // Verify game exists
-        const game = await game_model_1.GameModel.findOne({ code: gameId });
-        if (!game) {
-            return res.status(404).json({ error: 'Game not found' });
-        }
-        // Lưu action vào MongoDB
-        const action = await playerAction_model_1.PlayerActionModel.create({
-            gameId,
-            playerId,
-            actionType: 'pick-treasure',
-            status: 'pending'
-        });
-        res.json({ success: true, actionId: action._id });
-    }
-    catch (error) {
-        res.status(400).json({ error: error.message });
-    }
-};
-exports.pickTreasure = pickTreasure;
-const dropTreasure = async (req, res) => {
-    try {
-        const { gameId, playerId } = req.params;
-        // Verify game exists
-        const game = await game_model_1.GameModel.findOne({ code: gameId });
-        if (!game) {
-            return res.status(404).json({ error: 'Game not found' });
-        }
-        // Lưu action vào MongoDB
-        const action = await playerAction_model_1.PlayerActionModel.create({
-            gameId,
-            playerId,
-            actionType: 'drop-treasure',
-            status: 'pending'
-        });
-        res.json({ success: true, actionId: action._id });
-    }
-    catch (error) {
-        res.status(400).json({ error: error.message });
-    }
-};
-exports.dropTreasure = dropTreasure;

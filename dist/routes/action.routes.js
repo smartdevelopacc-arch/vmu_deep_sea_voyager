@@ -2,10 +2,10 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const action_controller_1 = require("../controllers/action.controller");
+const authMiddleware_1 = require("../core/authMiddleware");
 const router = (0, express_1.Router)();
-router.post('/:gameId/player/:playerId/move', action_controller_1.move);
-router.post('/:gameId/player/:playerId/trap', action_controller_1.trap);
-router.post('/:gameId/player/:playerId/rest', action_controller_1.rest);
-router.post('/:gameId/player/:playerId/pick-treasure', action_controller_1.pickTreasure);
-router.post('/:gameId/player/:playerId/drop-treasure', action_controller_1.dropTreasure);
+// Apply validatePlayerSecret middleware to all action routes
+router.post('/:gameId/player/:playerId/move', authMiddleware_1.validatePlayerSecret, action_controller_1.move);
+router.post('/:gameId/player/:playerId/trap', authMiddleware_1.validatePlayerSecret, action_controller_1.trap);
+router.post('/:gameId/player/:playerId/rest', authMiddleware_1.validatePlayerSecret, action_controller_1.rest);
 exports.default = router;

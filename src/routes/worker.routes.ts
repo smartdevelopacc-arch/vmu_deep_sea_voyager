@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { 
   initializeGame, 
   startGame, 
@@ -7,8 +7,12 @@ import {
   getAllGames 
 } from '../core/gameLoop';
 import { GameModel } from '../models/game.model';
+import { validateAdminApiKey } from '../core/adminAuthMiddleware';
 
 const router = Router();
+
+// Apply API key validation to ALL admin routes
+router.use(validateAdminApiKey);
 
 /**
  * Generate random terrain: -1 cho đảo, 0 cho biển
@@ -337,6 +341,9 @@ router.get('/game/:gameId/state', async (req, res) => {
     const usesRuntimeState = game.status === 'playing' && game.runtimeState;
     let traps: any = {};
     const trapSource = (usesRuntimeState && game.runtimeState) ? game.runtimeState.traps : game.map?.traps;
+
+    // Track trap count by owner to keep UI in sync with actual board state
+    const trapCountByPlayer = new Map<string, number>();
     
     if (trapSource && Array.isArray(trapSource)) {
       // Traps là array của [x, y, danger, playerId] hoặc object
@@ -349,10 +356,17 @@ router.get('/game/:gameId/state', async (req, res) => {
             danger: trap[2] || 1,
             playerId: trap[3] || 'unknown'
           };
+          const owner = trap[3];
+          if (owner) {
+            trapCountByPlayer.set(owner, (trapCountByPlayer.get(owner) || 0) + 1);
+          }
         } else if (trap.position) {
           // Format: { position: {x, y}, danger, playerId }
           const key = `${trap.position.x},${trap.position.y}`;
           traps[key] = trap;
+          if (trap.playerId) {
+            trapCountByPlayer.set(trap.playerId, (trapCountByPlayer.get(trap.playerId) || 0) + 1);
+          }
         }
       });
     } else if (trapSource) {
@@ -387,7 +401,7 @@ router.get('/game/:gameId/state', async (req, res) => {
         energy: p.energy,
         score: p.score || 0,
         carriedTreasure: p.carriedTreasure,
-        trapCount: p.trapCount || 0
+        trapCount: trapCountByPlayer.get(p.code || p.playerId) || p.trapCount || 0
       })),
       map: {
         width: game.map?.width || 0,
@@ -407,6 +421,101 @@ router.get('/game/:gameId/state', async (req, res) => {
     res.json({ gameState });
   } catch (error: any) {
     console.error('[ERROR] /game/:gameId/state:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * PUT /api/admin/game/:gameId/settings
+ * Admin-only: Update game settings (only when game hasn't started)
+ */
+router.put('/game/:gameId/settings', async (req: Request, res: Response) => {
+  try {
+    const { gameId } = req.params;
+    const { enableTraps, maxEnergy, energyRestore, maxTurns, timeLimitMs, tickIntervalMs } = req.body;
+
+    const game = await GameModel.findOne({ code: gameId });
+    if (!game) {
+      return res.status(404).json({ error: 'Game not found' });
+    }
+
+    // Only allow update when game hasn't started
+    if (game.status === 'playing') {
+      return res.status(400).json({ error: 'Cannot update settings while game is running' });
+    }
+
+    // Validate tickIntervalMs if provided
+    if (tickIntervalMs !== undefined && tickIntervalMs < 500) {
+      return res.status(400).json({ error: 'Tick interval must be at least 500ms' });
+    }
+
+    // Update settings
+    game.settings = {
+      enableTraps: enableTraps ?? game.settings?.enableTraps ?? true,
+      maxEnergy: maxEnergy ?? game.settings?.maxEnergy ?? 100,
+      energyRestore: energyRestore ?? game.settings?.energyRestore ?? 10,
+      maxTurns: maxTurns ?? game.settings?.maxTurns ?? 1200,
+      timeLimitMs: timeLimitMs ?? game.settings?.timeLimitMs ?? 300000,
+      tickIntervalMs: tickIntervalMs ?? game.settings?.tickIntervalMs ?? 500
+    };
+
+    await game.save();
+
+    res.json({
+      success: true,
+      settings: game.settings
+    });
+  } catch (error: any) {
+    console.error('Error updating game settings:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * PUT /api/admin/game/:gameId/map
+ * Admin-only: Update game map (only when game hasn't started)
+ */
+router.put('/game/:gameId/map', async (req: Request, res: Response) => {
+  try {
+    const { gameId } = req.params;
+    const { terrain, waves, treasures, bases, traps } = req.body;
+
+    const game = await GameModel.findOne({ code: gameId });
+    if (!game) {
+      return res.status(404).json({ error: 'Game not found' });
+    }
+
+    // Only allow update when game hasn't started
+    if (game.status === 'playing') {
+      return res.status(400).json({ error: 'Cannot update map while game is running' });
+    }
+
+    // Update map data
+    if (terrain) game.map.terrain = terrain;
+    if (waves) game.map.waves = waves;
+    if (treasures) game.map.treasures = treasures;
+    if (bases) game.map.bases = bases;
+    
+    // Update runtime state traps if provided (for pre-placed traps)
+    if (traps !== undefined) {
+      if (!game.runtimeState) {
+        game.runtimeState = {
+          treasures: game.map.treasures || [],
+          owners: [],
+          traps: []
+        }
+      }
+      game.runtimeState.traps = traps
+    }
+
+    await game.save();
+
+    res.json({
+      success: true,
+      message: 'Map updated successfully'
+    });
+  } catch (error: any) {
+    console.error('Error updating game map:', error);
     res.status(500).json({ error: error.message });
   }
 });

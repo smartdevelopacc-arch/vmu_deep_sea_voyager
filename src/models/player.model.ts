@@ -7,6 +7,7 @@ export interface IPlayer extends Document {
     name: string,
     logo: string,
     slogan: string,
+    secret?: string, // ✅ NEW: Secret token for authentication
     score: number,
     energy: number,
     position: { x: number, y: number },
@@ -20,6 +21,7 @@ export const PlayerSchema = new Schema<IPlayer>({
     name: { type: String, required: true},
     logo: { type: String, required: false},
     slogan: { type: String, required: false},
+    secret: { type: String, required: false }, // ✅ NEW: Player secret for authentication
     score: { type: Number, required: false, default: 0},
     energy: { type: Number, required: false, default: 100 },
     position: {

@@ -145,3 +145,6 @@ vite.config.ts.timestamp-*
 ._*
 
 .env
+
+/tmp
+/dist

@@ -9,7 +9,7 @@ const PlayerActionSchema = new mongoose_1.Schema({
     actionType: {
         type: String,
         required: true,
-        enum: ['move', 'trap', 'rest', 'pick-treasure', 'drop-treasure']
+        enum: ['move', 'trap', 'rest']
     },
     data: { type: mongoose_1.Schema.Types.Mixed },
     status: {
