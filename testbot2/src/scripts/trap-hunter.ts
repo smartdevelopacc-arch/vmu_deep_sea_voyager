@@ -10,7 +10,6 @@
 
 import axios from 'axios';
 import * as dotenv from 'dotenv';
-import { ApiEndpoints } from '../api-endpoints'; // ✅ Import API manager
 
 dotenv.config();
 
@@ -32,7 +31,6 @@ class TrapHunterBot {
   private actionInterval: number;
   private running: boolean = false;
   private intervalId?: NodeJS.Timeout;
-  private api: ApiEndpoints; // ✅ API manager
 
   private myPosition?: Position;
   private basePosition?: Position;
@@ -45,7 +43,6 @@ class TrapHunterBot {
     this.playerId = playerId;
     this.apiUrl = apiUrl;
     this.actionInterval = actionInterval;
-    this.api = new ApiEndpoints(apiUrl); // ✅ Initialize API manager
   }
 
   async start() {
@@ -73,8 +70,7 @@ class TrapHunterBot {
 
   private async fetchGameConfig() {
     try {
-      const endpoint = this.api.getGameConfig(this.gameId, this.playerId); // ✅ Use API manager
-      const response = await axios.get(endpoint);
+      const response = await axios.get(`${this.apiUrl}/game/${this.gameId}/config`);
       this.terrain = response.data.terrain;
       
       const bases = response.data.bases || [];
@@ -104,8 +100,7 @@ class TrapHunterBot {
 
   private async fetchGameState() {
     try {
-      const endpoint = this.api.getGameState(this.gameId, this.playerId); // ✅ Use API manager
-      const response = await axios.get(endpoint);
+      const response = await axios.get(`${this.apiUrl}/game/${this.gameId}/state`);
       
       const players = response.data.players || [];
       const myPlayer = players.find((p: any) => p.code === this.playerId || p.playerId === this.playerId);
@@ -279,34 +274,41 @@ class TrapHunterBot {
 
   private async sendAction(action: string, direction?: string) {
     try {
-      let url: string;
-      
-      // ✅ Include player-secret header for authentication
+      // Get player secret from environment
       const playerSecret = process.env.PLAYER_SECRET;
       if (!playerSecret) {
         console.error(`❌ PLAYER_SECRET not set in environment`);
         return;
       }
 
-      const headers = {
-        'player-secret': playerSecret
-      };
+      let url: string;
       
-      // ✅ Use API manager to get endpoint
       switch (action) {
         case 'move':
           if (!direction) throw new Error('Direction required for move action');
-          url = this.api.postMove(this.gameId, this.playerId);
-          await axios.post(url, { direction }, { headers });
+          url = `${this.apiUrl}/game/${this.gameId}/player/${this.playerId}/move`;
+          await axios.post(url, { direction }, {
+            headers: {
+              'player-secret': playerSecret
+            }
+          });
           break;
         case 'trap':
-          url = this.api.postTrap(this.gameId, this.playerId);
-          await axios.post(url, {}, { headers });
+          url = `${this.apiUrl}/game/${this.gameId}/player/${this.playerId}/trap`;
+          await axios.post(url, {}, {
+            headers: {
+              'player-secret': playerSecret
+            }
+          });
           break;
         case 'rest':
         default:
-          url = this.api.postRest(this.gameId, this.playerId);
-          await axios.post(url, {}, { headers });
+          url = `${this.apiUrl}/game/${this.gameId}/player/${this.playerId}/rest`;
+          await axios.post(url, {}, {
+            headers: {
+              'player-secret': playerSecret
+            }
+          });
           break;
       }
     } catch (error: any) {
