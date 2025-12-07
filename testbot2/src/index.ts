@@ -16,6 +16,7 @@ import axios from 'axios';
 import * as dotenv from 'dotenv';
 import { Position, BotConfig, GameConfig, GameState } from './types';
 import { decideAction, StrategyContext } from './strategy';
+import { ApiEndpoints } from './api-endpoints';
 
 // Load environment variables
 dotenv.config();
@@ -43,6 +44,7 @@ class TestBot {
   private config: BotConfig;
   private running: boolean = false;
   private intervalId?: NodeJS.Timeout;
+  private api: ApiEndpoints;
   
   // Static game configuration (fetched once)
   private gameConfig?: GameConfig;
@@ -67,6 +69,7 @@ class TestBot {
    */
   constructor(config: BotConfig) {
     this.config = config;
+    this.api = new ApiEndpoints(config.apiUrl);
   }
 
   /**
@@ -124,7 +127,8 @@ class TestBot {
    */
   private async fetchGameConfig() {
     try {
-      const configResponse = await axios.get(`${this.config.apiUrl}/game/${this.config.gameId}/config`);
+      const endpoint = this.api.getGameConfig(this.config.gameId, this.config.playerId);
+      const configResponse = await axios.get(endpoint);
       
       this.gameConfig = {
         width: configResponse.data.width,
@@ -155,7 +159,8 @@ class TestBot {
    */
   private async fetchGameState() {
     try {
-      const stateResponse = await axios.get(`${this.config.apiUrl}/game/${this.config.gameId}/state`);
+      const endpoint = this.api.getGameState(this.config.gameId, this.config.playerId);
+      const stateResponse = await axios.get(endpoint);
       
       this.gameState = {
         treasures: stateResponse.data.treasures,
@@ -420,20 +425,47 @@ class TestBot {
    * - rest: POST /game/:gameId/player/:playerId/rest
    * - trap: POST /game/:gameId/player/:playerId/trap
    * 
-   * Note: pick-treasure and drop-treasure actions are automatic
-   * and handled by the game engine during movement.
+   * Note: Treasure is auto-collected on move and auto-dropped at base
+   * Includes player-secret header for authentication
    * 
    * @param action - Action object with type and optional data
    */
   private async sendAction(action: { type: string; data?: any }) {
     try {
-      const endpoint = `${this.config.apiUrl}/game/${this.config.gameId}/player/${this.config.playerId}/${action.type}`;
+      // Use API manager to get endpoint
+      let endpoint: string;
+      switch (action.type) {
+        case 'move':
+          endpoint = this.api.postMove(this.config.gameId, this.config.playerId);
+          break;
+        case 'rest':
+          endpoint = this.api.postRest(this.config.gameId, this.config.playerId);
+          break;
+        case 'trap':
+          endpoint = this.api.postTrap(this.config.gameId, this.config.playerId);
+          break;
+        default:
+          throw new Error(`Unknown action type: ${action.type}`);
+      }
+
       console.log(`📤 Sending to: ${endpoint}`);
       console.log(`📤 Player ID: ${this.config.playerId}`);
       if (action.data) {
         console.log(`📤 Action data:`, JSON.stringify(action.data));
       }
-      const response = await axios.post(endpoint, action.data || {});
+      
+      // ✅ NEW: Include player-secret header for authentication
+      const playerSecret = process.env.PLAYER_SECRET;
+      if (!playerSecret) {
+        console.error(`❌ PLAYER_SECRET not set in environment`);
+        return;
+      }
+
+      const response = await axios.post(endpoint, action.data || {}, {
+        headers: {
+          'player-secret': playerSecret
+        }
+      });
       console.log(`✅ Action ${action.type} accepted (status: ${response.status})`);
     } catch (error: any) {
       if (error.response) {
