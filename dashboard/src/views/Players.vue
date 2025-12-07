@@ -42,7 +42,12 @@ import axios from 'axios'
 
 const playerStore = usePlayerStore()
 
-const players = computed(() => playerStore.players)
+const players = computed(() => {
+  return [...playerStore.players].sort((a, b) => {
+    // Sort by code (e.g., team_1, team_2, etc.)
+    return a.code.localeCompare(b.code, undefined, { numeric: true })
+  })
+})
 const loading = computed(() => playerStore.loading)
 const error = computed(() => playerStore.error)
 
@@ -100,8 +105,8 @@ onMounted(() => {
 }
 
 .players-grid {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
   gap: 15px;
   margin-top: 20px;
 }
@@ -139,9 +144,11 @@ onMounted(() => {
 
 .player-slogan {
   font-style: italic;
-  color: #888;
-  font-size: 14px;
-  margin: 5px 0 0 0;
+  color: #555;
+  font-size: 16px;
+  font-weight: 600;
+  margin: 8px 0 0 0;
+  line-height: 1.4;
 }
 
 .player-secret {

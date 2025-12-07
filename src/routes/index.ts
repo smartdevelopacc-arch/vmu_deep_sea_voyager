@@ -9,11 +9,15 @@ import resultRoutes from './result.routes';
 import workerRoutes from './worker.routes';
 import playersRoutes from './players.routes';
 import gameSettingsRoutes from './gameSettings.routes';
+import mapsRoutes from './maps.routes';
 
 const router = Router();
 
 // Players list (available players in system)
 router.use('/players', playersRoutes);
+
+// Maps list (available maps in system)
+router.use('/maps', mapsRoutes);
 
 // Game routes (client-facing)
 router.use('/game', gameStatusRoutes);

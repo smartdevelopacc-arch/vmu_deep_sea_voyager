@@ -60,6 +60,7 @@ interface PlayerState {
   playerId: string;
   code?: string; // Team code for leaderboard display
   name?: string; // Team name for leaderboard display
+  logo?: string; // Team logo for leaderboard display
   secret?: string; // Player secret for authentication
   position: Position;
   energy: number;
@@ -136,6 +137,9 @@ export const initializeGame = async (gameId: string, mapData: any, players: any[
     const basePosition = bases[index];
     gameState.players.set(player.playerId, {
       playerId: player.playerId,
+      code: player.code,
+      name: player.name,
+      logo: player.logo,
       position: basePosition,
       energy: MAX_ENERGY,
       trapCount: 0,
@@ -346,6 +350,9 @@ const processAction = (gameState: GameState, action: PlayerAction, playersRammed
       break;
     case 'trap':
       processTrap(gameState, player, action.data);
+      break;
+    case 'rest':
+      processRest(gameState, player);
       break;
   }
 };

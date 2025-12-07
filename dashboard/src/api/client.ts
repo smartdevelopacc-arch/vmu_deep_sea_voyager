@@ -37,7 +37,11 @@ export const adminAPI = {
   getLoopStatus: (gameId: string) => apiClient.get(`/admin/game/${gameId}/loop-status`),
   
   // Players
-  getPlayers: () => apiClient.get('/players')
+  getPlayers: () => apiClient.get('/players'),
+  
+  // Maps
+  getMaps: () => apiClient.get('/maps'),
+  getMapById: (mapCode: string) => apiClient.get(`/maps/${mapCode}`)
 }
 
 // Game API endpoints

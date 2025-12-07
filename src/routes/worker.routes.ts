@@ -216,10 +216,13 @@ router.post('/game/init', async (req, res) => {
     }
     
     // Convert player format: {code, name} -> {playerId}
-    // Dashboard sends {playerId, teamId, position, energy}
+    // Dashboard sends {playerId, code, name, logo, teamId, position, energy}
     // API test sends {code, name}
     const processedPlayers = players.map((p: any) => ({
       playerId: p.playerId || p.code, // Support both formats
+      code: p.code || p.playerId,
+      name: p.name, // Include player name from dashboard
+      logo: p.logo, // Include player logo from dashboard
       teamId: p.teamId || p.code,
       position: p.position,
       energy: p.energy || 100

@@ -24,10 +24,15 @@
             :style="getCellStyle(x, y)"
             :title="getCellTitle(x, y)"
           >
-            <!-- Hiển thị player với background màu -->
+            <!-- Hiển thị player với logo của đội -->
             <div v-if="getPlayerAtPosition(x, y)" class="player-indicator"
                  :style="getPlayerIndicatorStyle(getPlayerAtPosition(x, y)!, x, y)">
-              <span class="player-icon">⛵</span>
+              <img 
+                :src="`/dashboard/players/${getPlayerAtPosition(x, y)!.code}.png`"
+                :alt="getPlayerAtPosition(x, y)!.code"
+                class="player-logo"
+                :title="getPlayerAtPosition(x, y)!.code"
+              />
               <!-- Treasure badge nhấp nháy với giá trị nếu player đang mang treasure -->
               <span v-if="getPlayerAtPosition(x, y)!.carriedTreasure && getPlayerAtPosition(x, y)!.carriedTreasure > 0" 
                     class="treasure-badge">
@@ -472,8 +477,18 @@ const getCellTitle = (x: number, y: number) => {
   align-items: center;
   justify-content: center;
   box-shadow: 0 2px 6px rgba(0,0,0,0.4);
-  border: 1px solid rgba(255,255,255,0.3);
+  border: 2px solid rgba(255,255,255,0.5);
   position: relative;
+  overflow: hidden;
+  background: white;
+}
+
+.player-logo {
+  width: 85%;
+  height: 85%;
+  object-fit: contain;
+  border-radius: 50%;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.3));
 }
 
 .player-icon {

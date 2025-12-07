@@ -10,8 +10,9 @@ const saveGameState = async (gameState) => {
         console.log(`[DEBUG] Saving game state for ${gameState.gameId}...`);
         // Chuyển đổi Map thành Array để lưu vào MongoDB
         const playersArray = Array.from(gameState.players.values()).map((p, index) => ({
-            code: p.playerId,
+            code: p.code || p.playerId,
             name: p.name || `Player ${p.playerId}`,
+            logo: p.logo,
             playerId: p.playerId,
             position: p.position,
             energy: p.energy,

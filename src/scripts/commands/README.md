@@ -25,6 +25,44 @@ Import players từ thư mục `assets/players/` vào MongoDB.
 npm run cli import-players
 ```
 
+### import-maps.ts
+Import bản đồ từ thư mục `assets/maps/` vào MongoDB.
+
+**File format:** `assets/maps/<map_code>.json`
+
+**Supported JSON structure:**
+```json
+{
+  "name": "Map Name",
+  "description": "Optional description",
+  "gameId": "unique_game_id",
+  "mapData": {
+    "width": 30,
+    "height": 30,
+    "terrain": [[0, -1, ...], ...],
+    "waves": [[2, 3, ...], ...],
+    "treasures": [[0, 0, ...], ...],
+    "traps": [[0, 0, ...], ...],
+    "bases": [[0,0], [29,0], [0,29], [29,29]]
+  }
+}
+```
+
+**Usage:**
+```bash
+# Import all maps from assets/maps/
+npm run cli import-maps
+
+# List all imported maps
+npm run cli import-maps list
+```
+
+**Features:**
+- Auto-discovers all `.json` files in `assets/maps/`
+- Skips duplicates (maps with same code)
+- Shows detailed import summary
+- Validates map data against Map schema
+
 ### reset-db.ts
 Xóa tất cả game data (games, player actions) nhưng giữ lại players.
 

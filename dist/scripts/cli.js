@@ -5,6 +5,7 @@
  *
  * Usage:
  *   npm run cli import-players    - Import players from players/ directory
+ *   npm run cli import-maps       - Import maps from assets/maps/ directory
  *   npm run cli reset-db          - Clear all game data (keeps players)
  *   npm run cli reset-all         - Clear everything including players
  *   npm run cli list-players      - Show all players in database
@@ -52,6 +53,7 @@ const db_1 = require("../core/db");
 const mongoose_1 = __importDefault(require("mongoose"));
 // Import command handlers
 const importPlayersCmd = __importStar(require("./commands/import-players"));
+const importMapsCmd = __importStar(require("./commands/import-maps"));
 const resetDbCmd = __importStar(require("./commands/reset-db"));
 const resetAllCmd = __importStar(require("./commands/reset-all"));
 const listPlayersCmd = __importStar(require("./commands/list-players"));
@@ -60,6 +62,7 @@ const dropPlayerIndexCmd = __importStar(require("./commands/drop-player-index"))
 const helpCmd = __importStar(require("./commands/help"));
 const commands = {
     'import-players': importPlayersCmd,
+    'import-maps': importMapsCmd,
     'reset-db': resetDbCmd,
     'reset-all': resetAllCmd,
     'list-players': listPlayersCmd,
@@ -69,6 +72,7 @@ const commands = {
 };
 async function main() {
     const command = process.argv[2];
+    const args = process.argv.slice(3);
     if (!command || command === 'help') {
         await helpCmd.handle();
         process.exit(0);
@@ -83,7 +87,7 @@ async function main() {
         console.log('🔌 Connecting to database...');
         await (0, db_1.connectDB)();
         console.log('✅ Connected to MongoDB\n');
-        await commandModule.handle();
+        await commandModule.handle(args);
         console.log('\n👋 Done!');
         await mongoose_1.default.connection.close();
         process.exit(0);

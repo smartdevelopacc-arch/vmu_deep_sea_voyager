@@ -4,6 +4,7 @@
  * 
  * Usage:
  *   npm run cli import-players    - Import players from players/ directory
+ *   npm run cli import-maps       - Import maps from assets/maps/ directory
  *   npm run cli reset-db          - Clear all game data (keeps players)
  *   npm run cli reset-all         - Clear everything including players
  *   npm run cli list-players      - Show all players in database
@@ -16,6 +17,7 @@ import mongoose from 'mongoose';
 
 // Import command handlers
 import * as importPlayersCmd from './commands/import-players';
+import * as importMapsCmd from './commands/import-maps';
 import * as resetDbCmd from './commands/reset-db';
 import * as resetAllCmd from './commands/reset-all';
 import * as listPlayersCmd from './commands/list-players';
@@ -25,6 +27,7 @@ import * as helpCmd from './commands/help';
 
 const commands = {
   'import-players': importPlayersCmd,
+  'import-maps': importMapsCmd,
   'reset-db': resetDbCmd,
   'reset-all': resetAllCmd,
   'list-players': listPlayersCmd,
@@ -35,6 +38,7 @@ const commands = {
 
 async function main() {
   const command = process.argv[2];
+  const args = process.argv.slice(3);
   
   if (!command || command === 'help') {
     await helpCmd.handle();
@@ -54,7 +58,7 @@ async function main() {
     await connectDB();
     console.log('✅ Connected to MongoDB\n');
     
-    await commandModule.handle();
+    await commandModule.handle(args);
     
     console.log('\n👋 Done!');
     await mongoose.connection.close();

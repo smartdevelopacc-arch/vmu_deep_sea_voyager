@@ -54,6 +54,9 @@ const initializeGame = async (gameId, mapData, players) => {
         const basePosition = bases[index];
         gameState.players.set(player.playerId, {
             playerId: player.playerId,
+            code: player.code,
+            name: player.name,
+            logo: player.logo,
             position: basePosition,
             energy: MAX_ENERGY,
             trapCount: 0,
@@ -234,6 +237,9 @@ const processAction = (gameState, action, playersRammedThisTick) => {
             break;
         case 'trap':
             processTrap(gameState, player, action.data);
+            break;
+        case 'rest':
+            processRest(gameState, player);
             break;
     }
 };

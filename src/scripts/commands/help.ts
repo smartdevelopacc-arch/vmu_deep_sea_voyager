@@ -5,6 +5,8 @@ export async function handle() {
 Available commands:
 
   import-players    Import players from assets/players/ directory to database
+  import-maps       Import maps from assets/maps/ directory to database
+                    Use: npm run cli import-maps [list|-- --force|help]
   reset-db          Clear all game data (preserves players)
   reset-all         Clear everything including players
   list-players      Show all players in database
@@ -13,10 +15,13 @@ Available commands:
   help              Show this help message
 
 Usage:
-  npm run cli <command>
+  npm run cli <command> [options]
 
 Examples:
   npm run cli import-players
+  npm run cli import-maps                 # Import maps (skip existing)
+  npm run cli import-maps -- --force      # Import maps (overwrite existing)
+  npm run cli import-maps list            # List all imported maps
   npm run cli reset-db
   npm run cli list-players
   npm run cli drop-player-index

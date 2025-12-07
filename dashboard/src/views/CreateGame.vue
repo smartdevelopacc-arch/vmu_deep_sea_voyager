@@ -31,6 +31,18 @@
       <div class="form-section">
         <h2>Map Configuration</h2>
         
+        <div class="form-group">
+          <label>Select from Map Bank *</label>
+          <select v-model="selectedMapCode" @change="loadMapFromBank">
+            <option value="">-- Choose a map --</option>
+            <option v-for="map in availableMaps" :key="map.code" :value="map.code">
+              {{ map.name }} ({{ map.width }}x{{ map.height }})
+            </option>
+          </select>
+        </div>
+
+        <div class="divider">OR</div>
+
         <div class="form-row">
           <div class="form-group">
             <label for="width">Width *</label>
@@ -77,7 +89,10 @@
             v-for="player in availablePlayers" 
             :key="player.code"
             class="player-option"
-            :class="{ selected: isPlayerSelected(player.code) }"
+            :class="{ 
+              selected: isPlayerSelected(player.code), 
+              disabled: !isPlayerSelected(player.code) && form.selectedPlayers.length >= 4 
+            }"
             @click="togglePlayer(player)"
           >
             <img v-if="player.logo" :src="player.logo" :alt="player.name" class="player-avatar" />
@@ -89,7 +104,8 @@
           </div>
         </div>
         
-        <p class="hint">Selected: {{ form.selectedPlayers.length }} players</p>
+        <p class="hint">Selected: {{ form.selectedPlayers.length }} / 4 teams (max 4)</p>
+        <p v-if="form.selectedPlayers.length >= 4" class="hint-warning">⚠️ Maximum 4 teams reached</p>
       </div>
 
       <div class="form-actions">
@@ -122,6 +138,9 @@ const form = ref({
 })
 
 const selectedTemplate = ref('')
+const selectedMapCode = ref('')
+const availableMaps = ref<any[]>([])
+const selectedMapData = ref<any>(null)
 const submitting = ref(false)
 const error = ref('')
 const success = ref('')
@@ -131,6 +150,7 @@ const availablePlayers = computed(() => playerStore.players)
 const canSubmit = computed(() => {
   return form.value.gameId && 
          form.value.selectedPlayers.length >= 2 &&
+         form.value.selectedPlayers.length <= 4 &&
          form.value.mapSize.width >= 10 &&
          form.value.mapSize.height >= 10
 })
@@ -144,11 +164,46 @@ const togglePlayer = (player: any) => {
   if (index >= 0) {
     form.value.selectedPlayers.splice(index, 1)
   } else {
-    form.value.selectedPlayers.push(player)
+    // Only allow adding if less than 4 teams
+    if (form.value.selectedPlayers.length < 4) {
+      form.value.selectedPlayers.push(player)
+    }
+  }
+}
+
+const fetchMaps = async () => {
+  try {
+    const response = await adminAPI.getMaps()
+    availableMaps.value = response.data
+  } catch (err: any) {
+    console.error('Failed to fetch maps:', err)
+  }
+}
+
+const loadMapFromBank = async () => {
+  if (!selectedMapCode.value) {
+    selectedMapData.value = null
+    return
+  }
+
+  try {
+    const response = await adminAPI.getMapById(selectedMapCode.value)
+    selectedMapData.value = response.data
+    form.value.mapSize = {
+      width: response.data.width,
+      height: response.data.height
+    }
+    selectedTemplate.value = ''
+  } catch (err: any) {
+    error.value = 'Failed to load map from bank'
+    console.error(err)
   }
 }
 
 const applyTemplate = () => {
+  selectedMapCode.value = ''
+  selectedMapData.value = null
+  
   const templates: Record<string, any> = {
     small: { width: 30, height: 30 },
     medium: { width: 40, height: 40 },
@@ -162,22 +217,42 @@ const applyTemplate = () => {
 }
 
 const generateMap = () => {
+  // If using map from bank, use it directly
+  if (selectedMapData.value) {
+    const mapData = {
+      width: selectedMapData.value.width,
+      height: selectedMapData.value.height,
+      terrain: selectedMapData.value.terrain,
+      waves: selectedMapData.value.waves,
+      treasures: selectedMapData.value.treasures,
+      traps: selectedMapData.value.traps,
+      bases: selectedMapData.value.bases || []
+    }
+    
+    // Ensure we have enough bases for all players
+    const numPlayers = form.value.selectedPlayers.length
+    if (mapData.bases.length < numPlayers) {
+      mapData.bases = generateBasesForPlayers(mapData.width, mapData.height, numPlayers)
+    }
+    
+    return mapData
+  }
+
+  // Otherwise generate custom map
   const { width, height } = form.value.mapSize
+  const numPlayers = form.value.selectedPlayers.length
   
   const centerX = width / 2
   const centerY = height / 2
   const maxRadius = Math.sqrt(centerX * centerX + centerY * centerY)
-  const treasureRadius = maxRadius * 0.5 // Treasures trong 50% bán kính tâm
+  const treasureRadius = maxRadius * 0.5
   
-  // Generate treasures (concentrated near center)
   const treasures = Array(height).fill(0).map((_, y) => 
     Array(width).fill(0).map((_, x) => {
-      // Tính khoảng cách từ tâm
       const distX = x - centerX
       const distY = y - centerY
       const distance = Math.sqrt(distX * distX + distY * distY)
       
-      // Chỉ đặt treasure trong khu vực gần tâm
       if (distance > treasureRadius) return 0
       
       const rand = Math.random()
@@ -188,14 +263,43 @@ const generateMap = () => {
     })
   )
   
-  // Bases at corners
-  const bases = [
-    [0, 0],
-    [width - 1, height - 1]
-  ]
+  const bases = generateBasesForPlayers(width, height, numPlayers)
   
-  // Không gửi terrain và waves - để backend tự sinh
   return { width, height, treasures, bases }
+}
+
+const generateBasesForPlayers = (width: number, height: number, numPlayers: number) => {
+  if (numPlayers === 0) {
+    return [[0, 0], [width - 1, height - 1]]
+  }
+  
+  // Generate bases distributed around the map corners and edges
+  const bases: [number, number][] = []
+  const padding = 2
+  
+  if (numPlayers === 2) {
+    bases.push([padding, padding])
+    bases.push([width - 1 - padding, height - 1 - padding])
+  } else if (numPlayers === 3) {
+    bases.push([padding, padding])
+    bases.push([width - 1 - padding, padding])
+    bases.push([Math.floor(width / 2), height - 1 - padding])
+  } else if (numPlayers >= 4) {
+    bases.push([padding, padding])
+    bases.push([width - 1 - padding, padding])
+    bases.push([padding, height - 1 - padding])
+    bases.push([width - 1 - padding, height - 1 - padding])
+    
+    // If more than 4 players, add bases along edges
+    for (let i = 4; i < numPlayers; i++) {
+      const isTop = i % 2 === 0
+      const x = padding + ((i - 4) * (width - 2 * padding)) / (numPlayers - 4)
+      const y = isTop ? padding : height - 1 - padding
+      bases.push([Math.floor(x), y])
+    }
+  }
+  
+  return bases.slice(0, numPlayers)
 }
 
 const handleSubmit = async () => {
@@ -210,8 +314,11 @@ const handleSubmit = async () => {
     
     const players = form.value.selectedPlayers.map((p, i) => ({
       playerId: p.code,
+      code: p.code,
+      name: p.name,
+      logo: p.logo,
       teamId: `team${i + 1}`,
-      position: mapData.bases[i % mapData.bases.length],
+      position: mapData.bases[i],
       energy: 100
     }))
     
@@ -238,6 +345,7 @@ const handleSubmit = async () => {
 
 onMounted(() => {
   playerStore.fetchPlayers()
+  fetchMaps()
 })
 </script>
 
@@ -265,6 +373,32 @@ onMounted(() => {
   color: #333;
   border-bottom: 2px solid #f0f0f0;
   padding-bottom: 8px;
+}
+
+.divider {
+  text-align: center;
+  margin: 20px 0;
+  color: #999;
+  font-size: 14px;
+  position: relative;
+}
+
+.divider::before,
+.divider::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 45%;
+  height: 1px;
+  background: #ddd;
+}
+
+.divider::before {
+  left: 0;
+}
+
+.divider::after {
+  right: 0;
 }
 
 .form-group {
@@ -318,7 +452,7 @@ onMounted(() => {
   transition: all 0.2s;
 }
 
-.player-option:hover {
+.player-option:hover:not(.disabled) {
   border-color: #3b82f6;
   background: #f8f9fa;
 }
@@ -326,6 +460,12 @@ onMounted(() => {
 .player-option.selected {
   border-color: #3b82f6;
   background: #e3f2fd;
+}
+
+.player-option.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: #f5f5f5;
 }
 
 .player-avatar {
@@ -359,6 +499,13 @@ onMounted(() => {
   font-size: 13px;
   color: #666;
   margin-top: 10px;
+}
+
+.hint-warning {
+  font-size: 13px;
+  color: #d97706;
+  margin-top: 5px;
+  font-weight: 600;
 }
 
 .form-actions {

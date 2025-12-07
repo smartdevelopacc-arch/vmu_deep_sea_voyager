@@ -14,9 +14,12 @@ const result_routes_1 = __importDefault(require("./result.routes"));
 const worker_routes_1 = __importDefault(require("./worker.routes"));
 const players_routes_1 = __importDefault(require("./players.routes"));
 const gameSettings_routes_1 = __importDefault(require("./gameSettings.routes"));
+const maps_routes_1 = __importDefault(require("./maps.routes"));
 const router = (0, express_1.Router)();
 // Players list (available players in system)
 router.use('/players', players_routes_1.default);
+// Maps list (available maps in system)
+router.use('/maps', maps_routes_1.default);
 // Game routes (client-facing)
 router.use('/game', gameStatus_routes_1.default);
 router.use('/game', map_routes_1.default);

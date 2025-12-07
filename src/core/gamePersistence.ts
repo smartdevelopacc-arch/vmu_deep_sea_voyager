@@ -10,6 +10,7 @@ interface PlayerState {
   playerId: string;
   code?: string; // ✅ ENHANCED: Team code for leaderboard display
   name?: string; // ✅ ENHANCED: Team name for leaderboard display
+  logo?: string; // ✅ ENHANCED: Team logo for leaderboard display
   position: Position;
   energy: number;
   carriedTreasure?: number;
@@ -58,8 +59,9 @@ export const saveGameState = async (gameState: GameState): Promise<void> => {
     
     // Chuyển đổi Map thành Array để lưu vào MongoDB
     const playersArray = Array.from(gameState.players.values()).map((p, index) => ({
-      code: p.playerId,
+      code: p.code || p.playerId,
       name: p.name || `Player ${p.playerId}`,
+      logo: p.logo,
       playerId: p.playerId,
       position: p.position,
       energy: p.energy,

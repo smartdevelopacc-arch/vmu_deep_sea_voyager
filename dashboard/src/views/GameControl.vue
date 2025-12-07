@@ -33,9 +33,17 @@
             <tr v-for="(row, idx) in finishedLeaderboard" :key="row.playerId">
               <td>{{ idx + 1 }}</td>
               <td>
-                <span class="player-badge" :style="{ backgroundColor: getPlayerColor(row) }">
-                  {{ row.name || row.code || row.playerId }}
-                </span>
+                <div class="team-display">
+                  <img 
+                    v-if="row.teamLogo" 
+                    :src="row.teamLogo" 
+                    :alt="row.teamName"
+                    class="team-logo"
+                  />
+                  <span class="player-badge" :style="{ backgroundColor: getPlayerColor(row) }">
+                    {{ row.teamName || row.name || row.code || row.playerId }}
+                  </span>
+                </div>
               </td>
               <td class="score-cell">{{ row.score }}</td>
             </tr>
@@ -92,9 +100,17 @@
                     :class="{ 'score-updated': recentScoreUpdates.includes(player.code) }"
                     class="player-row">
                   <td>
-                    <span class="player-badge" :style="{ backgroundColor: getPlayerColor(player) }">
-                      {{ player.teamName || player.name || player.code }}
-                    </span>
+                    <div class="team-display">
+                      <img 
+                        v-if="player.teamLogo" 
+                        :src="player.teamLogo" 
+                        :alt="player.code"
+                        class="team-logo-small"
+                      />
+                      <span class="player-badge" :style="{ backgroundColor: getPlayerColor(player) }">
+                        {{ player.name || player.teamName || player.code }}
+                      </span>
+                    </div>
                   </td>
                   <td>
                     <div class="energy-bar-container">
@@ -277,6 +293,9 @@ const sortedPlayers = computed(() => {
       // ✅ ENHANCED: Prefer code as display name for leaderboard
       const displayName = p.code || p.teamName || globalPlayer?.teamName || globalPlayer?.name || p.name || p.playerId
       
+      // Get team logo from player code (e.g., "team_13" -> "/public/players/team_13.png")
+      const teamLogo = p.code ? `/dashboard/players/${p.code}.png` : null
+      
       const enriched = {
         ...p,
         // ✅ ENHANCED: Preserve original index for consistent color assignment
@@ -286,7 +305,9 @@ const sortedPlayers = computed(() => {
         // Keep original name for detail
         name: p.name || globalPlayer?.name || displayName,
         // Ensure code is always present
-        code: p.code || p.playerId
+        code: p.code || p.playerId,
+        // ✅ NEW: Add team logo URL
+        teamLogo
       }
       
       return enriched
@@ -314,18 +335,23 @@ const finishedLeaderboard = computed(() => {
     }
     return [...finalScores]
       .sort((a, b) => b.score - a.score)
-      .map(s => ({
-        playerId: s.playerId,
-        score: s.score,
-        code: playersById[s.playerId]?.code || s.playerId,
-        originalIndex: playerOriginalIndex[s.playerId] ?? 0,
-        name:
-          playersById[s.playerId]?.teamName ||
-          playersById[s.playerId]?.name ||
-          globalByCode[playersById[s.playerId]?.code || s.playerId]?.teamName ||
-          globalByCode[playersById[s.playerId]?.code || s.playerId]?.name ||
-          undefined
-      }))
+      .map(s => {
+        const playerCode = playersById[s.playerId]?.code || s.playerId
+        return {
+          playerId: s.playerId,
+          score: s.score,
+          code: playerCode,
+          teamName: playerCode,
+          teamLogo: playerCode ? `/dashboard/players/${playerCode}.png` : null,
+          originalIndex: playerOriginalIndex[s.playerId] ?? 0,
+          name:
+            playersById[s.playerId]?.teamName ||
+            playersById[s.playerId]?.name ||
+            globalByCode[playerCode]?.teamName ||
+            globalByCode[playerCode]?.name ||
+            undefined
+        }
+      })
   }
   // Fallback to current players' scores if finalScores not provided
   // Use global players store to fill names if missing
@@ -338,6 +364,8 @@ const finishedLeaderboard = computed(() => {
       playerId: p.playerId,
       score: p.score || 0,
       code: p.code,
+      teamName: p.code,
+      teamLogo: p.code ? `/dashboard/players/${p.code}.png` : null,
       originalIndex,
       name: p.teamName || p.name || globalByCode[p.code]?.teamName || globalByCode[p.code]?.name
     }))
@@ -668,8 +696,8 @@ onUnmounted(() => {
 
 .info-sidebar {
   flex: 0 0 auto;
-  min-width: 250px;
-  max-width: 320px;
+  min-width: 350px;
+  max-width: 450px;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -831,6 +859,36 @@ tbody tr {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.team-display {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.team-logo {
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  object-fit: contain;
+  background: white;
+  border: 1px solid #e5e7eb;
+}
+
+.team-logo-small {
+  width: 24px;
+  height: 24px;
+  border-radius: 3px;
+  object-fit: contain;
+  background: white;
+  border: 1px solid #e5e7eb;
+}
+
+.team-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: #1f2937;
 }
 
 .score-cell {

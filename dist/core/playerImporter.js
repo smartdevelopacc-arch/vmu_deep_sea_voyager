@@ -40,9 +40,21 @@ const importPlayers = async () => {
         const filePath = path_1.default.join(playersDir, file);
         try {
             const info = JSON.parse(fs_1.default.readFileSync(filePath, 'utf-8'));
-            // ✅ NEW: Generate or retrieve existing secret
+            // ✅ NEW: Use player_secret from file if provided, otherwise generate or retrieve existing
             const existingPlayer = await player_model_1.Player.findOne({ code: playerCode });
-            const secret = existingPlayer?.secret || generatePlayerSecret();
+            let secret;
+            if (info.player_secret) {
+                // Use secret from JSON file
+                secret = info.player_secret;
+            }
+            else if (existingPlayer?.secret) {
+                // Keep existing secret from database
+                secret = existingPlayer.secret;
+            }
+            else {
+                // Generate new random secret
+                secret = generatePlayerSecret();
+            }
             // Upsert player vào database
             await player_model_1.Player.findOneAndUpdate({ code: playerCode }, {
                 code: playerCode,

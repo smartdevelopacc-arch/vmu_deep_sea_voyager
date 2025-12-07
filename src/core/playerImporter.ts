@@ -8,6 +8,7 @@ interface PlayerInfo {
   name: string;
   slogan: string;
   logo: string;
+  player_secret?: string; // Optional: if provided in JSON, use it instead of generating
 }
 
 /**
@@ -49,9 +50,20 @@ export const importPlayers = async () => {
     try {
       const info: PlayerInfo = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
 
-      // ✅ NEW: Generate or retrieve existing secret
+      // ✅ NEW: Use player_secret from file if provided, otherwise generate or retrieve existing
       const existingPlayer = await Player.findOne({ code: playerCode });
-      const secret = existingPlayer?.secret || generatePlayerSecret();
+      let secret: string;
+      
+      if (info.player_secret) {
+        // Use secret from JSON file
+        secret = info.player_secret;
+      } else if (existingPlayer?.secret) {
+        // Keep existing secret from database
+        secret = existingPlayer.secret;
+      } else {
+        // Generate new random secret
+        secret = generatePlayerSecret();
+      }
 
       // Upsert player vào database
       await Player.findOneAndUpdate(
