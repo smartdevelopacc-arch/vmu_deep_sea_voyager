@@ -385,6 +385,8 @@ const getCellTitle = (x: number, y: number) => {
   width: 100%;
   height: 100%;
   align-self: flex-start;
+  position: relative;
+  z-index: 1;
 }
 
 .empty {

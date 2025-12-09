@@ -505,6 +505,8 @@ onUnmounted(() => {
   gap: 10px;
   flex-wrap: wrap;
   flex-shrink: 0;
+  position: relative;
+  z-index: 100;
 }
 
 .btn {
@@ -514,6 +516,9 @@ onUnmounted(() => {
   cursor: pointer;
   text-decoration: none;
   display: inline-block;
+  position: relative;
+  z-index: 101;
+  pointer-events: auto;
 }
 
 .btn:disabled {
@@ -674,6 +679,7 @@ onUnmounted(() => {
   justify-content: center;
   max-height: 95vh;
   position: relative;
+  z-index: 1;
 }
 
 /* Keep map area square by constraining to the smaller of available width/height */
@@ -684,6 +690,7 @@ onUnmounted(() => {
   width: 100%;
   max-width: 100%;
   max-height: 100%;
+  pointer-events: none;
 }
 
 .map-section > * {
@@ -742,7 +749,7 @@ onUnmounted(() => {
 
 .sponsors-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(90px, 1fr));
+  grid-template-columns: repeat(3, minmax(90px, 1fr));
   gap: 8px;
 }
 

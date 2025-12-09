@@ -24,6 +24,41 @@ interface MapFile {
 }
 
 /**
+ * Validate map data for logical consistency
+ * Returns array of validation errors, empty if valid
+ */
+function validateMapData(mapData: MapFile['mapData'], mapCode: string): string[] {
+  const errors: string[] = [];
+  const { width, height, terrain, treasures, bases } = mapData;
+
+  // Convert bases to coordinate array for easier checking
+  const baseCoords = bases.map(b => Array.isArray(b) ? { x: b[0], y: b[1] } : b);
+
+  // Check each cell
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const terrainValue = terrain[y]?.[x];
+      const treasureValue = treasures[y]?.[x];
+      
+      // Rule 1: Treasure cannot be placed on island (terrain = -1)
+      if (terrainValue === -1 && treasureValue && treasureValue > 0) {
+        errors.push(`Treasure (value=${treasureValue}) at (${x}, ${y}) is on an island (terrain=-1)`);
+      }
+      
+      // Rule 2: Island cannot be placed on base
+      if (terrainValue === -1) {
+        const isBase = baseCoords.some(base => base.x === x && base.y === y);
+        if (isBase) {
+          errors.push(`Island (terrain=-1) at (${x}, ${y}) is on a base position`);
+        }
+      }
+    }
+  }
+
+  return errors;
+}
+
+/**
  * Import maps từ thư mục assets/maps/ vào MongoDB
  * Mỗi map là một file: assets/maps/<map_code>.json
  * 
@@ -67,6 +102,16 @@ export async function importMaps(options?: { verbose?: boolean; skipDuplicates?:
 
         // Extract map data
         const mapData = mapFile.mapData;
+        
+        // ✅ Validate map data
+        const validationErrors = validateMapData(mapData, mapCode);
+        if (validationErrors.length > 0) {
+          console.error(`❌ Validation failed for ${mapCode}:`);
+          validationErrors.forEach(err => console.error(`   - ${err}`));
+          errors++;
+          continue;
+        }
+        
         const mapRecord = {
           code: mapCode,
           name: mapFile.name || mapCode,
