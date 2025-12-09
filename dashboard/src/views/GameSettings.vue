@@ -106,97 +106,6 @@
         </div>
       </div>
 
-      <!-- Map Editor Section -->
-      <div class="section">
-        <h2>🗺️ Map Configuration</h2>
-        
-        <div class="map-info">
-          <div class="info-item">
-            <strong>Size:</strong> {{ mapData.width }} × {{ mapData.height }}
-          </div>
-          <div class="info-item">
-            <strong>Bases:</strong> {{ mapData.bases?.length || 0 }}
-          </div>
-          <div class="info-item">
-            <strong>Total Treasures:</strong> {{ totalTreasures }}
-          </div>
-        </div>
-
-        <div class="map-preview">
-          <MapViewer 
-            :mapData="mapData" 
-            :players="[]"
-            :currentTurn="0"
-          />
-        </div>
-
-        <div class="form-group">
-          <label>
-            <input type="checkbox" v-model="showMapEditor" :disabled="!canEdit">
-            Enable Map Editor
-          </label>
-          <small>Advanced: Modify terrain, waves, and treasures</small>
-        </div>
-
-        <div v-if="showMapEditor && canEdit" class="map-editor">
-          <div class="editor-tools">
-            <select v-model="editMode">
-              <option value="terrain">Terrain (Islands)</option>
-              <option value="waves">Waves (0-5)</option>
-              <option value="treasures">Treasures</option>
-              <option value="bases">Bases</option>
-            </select>
-            
-            <input 
-              v-if="editMode !== 'bases'"
-              type="number" 
-              v-model.number="brushValue" 
-              :min="editMode === 'terrain' ? -1 : 0"
-              :max="editMode === 'waves' ? 5 : 100"
-              placeholder="Value"
-            >
-            
-            <button @click="clearLayer" class="btn btn-danger">
-              Clear {{ editMode }}
-            </button>
-          </div>
-
-          <div class="grid-editor" :style="gridStyle">
-            <div 
-              v-for="y in mapData.height" 
-              :key="`row-${y-1}`"
-              class="grid-row"
-            >
-              <div 
-                v-for="x in mapData.width" 
-                :key="`cell-${y-1}-${x-1}`"
-                class="grid-cell"
-                :class="getCellClass(x-1, y-1)"
-                @click="editCell(x-1, y-1)"
-                :title="getCellValue(x-1, y-1)"
-              >
-                <span class="cell-value">{{ getCellDisplay(x-1, y-1) }}</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="actions">
-            <button 
-              @click="saveMap" 
-              class="btn btn-primary"
-              :disabled="saving"
-            >
-              {{ saving ? 'Saving...' : 'Save Map' }}
-            </button>
-            <button 
-              @click="loadOriginalMap" 
-              class="btn btn-secondary"
-            >
-              Reload Original
-            </button>
-          </div>
-        </div>
-      </div>
     </div>
 
     <div v-if="successMessage" class="success-toast">
@@ -208,7 +117,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
-import axios from 'axios';
+import apiClient from '../api/client';
 import MapViewer from '../components/MapViewer.vue';
 
 const route = useRoute();
@@ -239,14 +148,35 @@ const timeLimitMinutes = computed({
 });
 
 // Map data
-const mapData = ref({
-  width: 10,
-  height: 10,
-  terrain: [] as number[][],
-  waves: [] as number[][],
-  treasures: [] as number[][],
-  bases: [] as any[]
-});
+type MapGrid = number[][];
+type MapData = {
+  width: number;
+  height: number;
+  terrain: MapGrid;
+  waves: MapGrid;
+  treasures: MapGrid;
+  bases: any[];
+};
+
+const makeGrid = (grid: MapGrid | undefined, width: number, height: number, fill: number): MapGrid =>
+  Array.from({ length: height }, (_, y) =>
+    Array.from({ length: width }, (_, x) => grid?.[y]?.[x] ?? fill)
+  );
+
+const normalizeMapData = (raw: any): MapData => {
+  const width = raw?.width || 0;
+  const height = raw?.height || 0;
+  return {
+    width,
+    height,
+    terrain: makeGrid(raw?.terrain, width, height, 0),
+    waves: makeGrid(raw?.waves, width, height, 2),
+    treasures: makeGrid(raw?.treasures, width, height, 0),
+    bases: raw?.bases || []
+  };
+};
+
+const mapData = ref<MapData>(normalizeMapData({ width: 10, height: 10 }));
 
 const originalMapData = ref<any>(null);
 
@@ -275,24 +205,16 @@ const loadData = async () => {
     error.value = '';
 
     // Load settings
-    const settingsRes = await axios.get(`/api/game/${gameId}/settings`);
+    const settingsRes = await apiClient.get(`/game/${gameId}/settings`);
     settings.value = settingsRes.data.settings;
 
     // Load game status
-    const statusRes = await axios.get(`/api/game/${gameId}/status`);
+    const statusRes = await apiClient.get(`/game/${gameId}/status`);
     canEdit.value = statusRes.data.status === 'waiting';
 
     // Load map
-    const mapRes = await axios.get(`/api/game/${gameId}/map`);
-    mapData.value = {
-      width: mapRes.data.terrain[0]?.length || 10,
-      height: mapRes.data.terrain?.length || 10,
-      terrain: JSON.parse(JSON.stringify(mapRes.data.terrain)),
-      waves: JSON.parse(JSON.stringify(mapRes.data.waves)),
-      treasures: JSON.parse(JSON.stringify(mapRes.data.treasures)),
-      bases: mapRes.data.bases || []
-    };
-    
+    const mapRes = await apiClient.get(`/game/${gameId}/map`);
+    mapData.value = normalizeMapData(mapRes.data);
     originalMapData.value = JSON.parse(JSON.stringify(mapData.value));
   } catch (err: any) {
     error.value = err.response?.data?.error || err.message;
@@ -304,7 +226,7 @@ const loadData = async () => {
 const saveSettings = async () => {
   try {
     saving.value = true;
-    await axios.put(`/api/admin/game/${gameId}/settings`, settings.value);
+    await apiClient.put(`/admin/game/${gameId}/settings`, settings.value);
     
     successMessage.value = 'Settings saved successfully!';
     setTimeout(() => successMessage.value = '', 3000);
@@ -329,7 +251,7 @@ const resetSettings = () => {
 const saveMap = async () => {
   try {
     saving.value = true;
-    await axios.put(`/api/game/${gameId}/map`, {
+    await apiClient.put(`/game/${gameId}/map`, {
       terrain: mapData.value.terrain,
       waves: mapData.value.waves,
       treasures: mapData.value.treasures,
@@ -348,7 +270,7 @@ const saveMap = async () => {
 
 const loadOriginalMap = () => {
   if (originalMapData.value) {
-    mapData.value = JSON.parse(JSON.stringify(originalMapData.value));
+    mapData.value = normalizeMapData(originalMapData.value);
   }
 };
 

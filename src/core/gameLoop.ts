@@ -25,6 +25,20 @@ const MAX_TRAP_DANGER = parseInt(process.env.GAME_MAX_TRAP_DANGER || '50');
 const TIME_LIMIT_MS = parseInt(process.env.GAME_TIME_LIMIT_MS || '300000'); // 5 phút mặc định
 const ENABLE_TRAPS = process.env.GAME_ENABLE_TRAPS !== 'false'; // Mặc định true
 
+const resolveSettings = (source?: any) => {
+  const s = (source && typeof source === 'object' && 'settings' in source) ? source.settings : source;
+  return {
+    enableTraps: s?.enableTraps ?? ENABLE_TRAPS,
+    maxEnergy: s?.maxEnergy ?? MAX_ENERGY,
+    energyRestore: s?.energyRestore ?? ENERGY_RESTORE,
+    maxTurns: s?.maxTurns ?? MAX_TURNS,
+    timeLimitMs: s?.timeLimitMs ?? TIME_LIMIT_MS,
+    tickIntervalMs: s?.tickIntervalMs ?? TICK_INTERVAL
+  };
+};
+
+const getSettingsFromState = (gameState: GameState) => resolveSettings(gameState?.settings);
+
 interface Position {
   x: number;
   y: number;
@@ -61,6 +75,7 @@ interface PlayerState {
   code?: string; // Team code for leaderboard display
   name?: string; // Team name for leaderboard display
   logo?: string; // Team logo for leaderboard display
+  slogan?: string; // ✅ ADDED: Team slogan for leaderboard display
   secret?: string; // Player secret for authentication
   position: Position;
   energy: number;
@@ -119,29 +134,28 @@ export const initializeGame = async (gameId: string, mapData: any, players: any[
       treasures: mapData.treasures,
       traps: new Map(),
       bases: bases,
-      owners: Array(mapData.height).fill(0).map(() => Array(mapData.width).fill(0))
+      // Preserve owners grid from map data if provided (supports number[][] or string[][])
+      owners: mapData.owners && Array.isArray(mapData.owners)
+        ? mapData.owners
+        : Array(mapData.height).fill(0).map(() => Array(mapData.width).fill(0))
     },
     actionQueue: [],
-    settings: {
-      enableTraps: ENABLE_TRAPS,
-      maxEnergy: MAX_ENERGY,
-      energyRestore: ENERGY_RESTORE,
-      maxTurns: MAX_TURNS,
-      timeLimitMs: TIME_LIMIT_MS,
-      tickIntervalMs: TICK_INTERVAL
-    }
+    settings: resolveSettings(mapData?.settings)
   };
 
   // Khởi tạo players tại các căn cứ
+  const initialSettings = getSettingsFromState(gameState);
   players.forEach((player, index) => {
     const basePosition = bases[index];
+    const maxEnergy = initialSettings.maxEnergy ?? MAX_ENERGY;
     gameState.players.set(player.playerId, {
       playerId: player.playerId,
       code: player.code,
       name: player.name,
       logo: player.logo,
+      slogan: player.slogan, // ✅ INCLUDE SLOGAN!
       position: basePosition,
-      energy: MAX_ENERGY,
+      energy: maxEnergy,
       trapCount: 0,
       score: 0,
       isAtBase: true
@@ -167,7 +181,8 @@ export const startGame = async (gameId: string) => {
     throw new Error(`Game ${gameId} not found`);
   }
   
-  const tickInterval = game.settings?.tickIntervalMs || TICK_INTERVAL;
+  const effectiveSettings = resolveSettings(game);
+  const tickInterval = effectiveSettings.tickIntervalMs;
   
   // Clone initial map config vào runtimeState
   const runtimeState = {
@@ -178,7 +193,8 @@ export const startGame = async (gameId: string) => {
   
   console.log(`🎮 Initializing runtime state: ${runtimeState.treasures.flat().filter((t: number) => t > 0).length} treasures`);
   
-  // Update status trong DB với runtimeState
+  // Update status trong DB với runtimeState - ĐẢM BẢO SETTINGS ĐƯỢC GIỮ LẠI
+  console.log(`[DEBUG] 🎬 startGame: Saving settings to DB:`, game.settings);
   await GameModel.updateOne(
     { code: gameId },
     { 
@@ -186,7 +202,8 @@ export const startGame = async (gameId: string) => {
         status: 'playing', 
         currentTurn: 0, 
         startTime,
-        runtimeState 
+        runtimeState,
+        settings: game.settings || {} // ✅ EXPLICITLY PRESERVE SETTINGS
       } 
     }
   );
@@ -269,7 +286,8 @@ const processTick = async (gameId: string) => {
     console.log(`🎮 Game ${gameId} - Turn ${gameState.currentTurn} starting - Remaining treasures: ${remainingTreasures}`);
     
     // Kiểm tra điều kiện kết thúc
-    if (shouldEndGame(gameState)) {
+    const settings = getSettingsFromState(gameState);
+    if (shouldEndGame(gameState, settings)) {
       await endGame(gameId);
       return;
     }
@@ -303,10 +321,12 @@ const processTick = async (gameId: string) => {
     });
 
     // BƯỚC 3.5: Hồi năng lượng cho players KHÔNG có action (tự động nghỉ)
+    const energyRestore = settings.energyRestore ?? ENERGY_RESTORE;
+    const maxEnergy = settings.maxEnergy ?? MAX_ENERGY;
     gameState.players.forEach((player, playerId) => {
       if (!playersWithActions.has(playerId) && !player.isAtBase) {
         // Player không có action và không ở base -> tự động hồi năng lượng
-        player.energy = Math.min(player.energy + ENERGY_RESTORE, MAX_ENERGY);
+        player.energy = Math.min(player.energy + energyRestore, maxEnergy);
         emitEnergyUpdate(gameState.gameId, player.playerId, player.energy);
       }
     });
@@ -431,6 +451,9 @@ const processMove = (gameState: GameState, player: PlayerState, data: { target: 
   }
 
   // Tự động drop treasure và tính điểm nếu về base
+  const settings = getSettingsFromState(gameState);
+  const maxEnergy = settings.maxEnergy ?? MAX_ENERGY;
+
   if (player.isAtBase && player.carriedTreasure && player.carriedTreasure > 0) {
     player.score += player.carriedTreasure;
     console.log(`🏆 Player ${player.playerId} auto-dropped treasure ${player.carriedTreasure} at base. New score: ${player.score}`);
@@ -438,10 +461,10 @@ const processMove = (gameState: GameState, player: PlayerState, data: { target: 
     const { emitTreasureDropped } = require('./socketEvents');
     emitTreasureDropped(gameState.gameId, player.playerId);
     player.carriedTreasure = 0;
-    player.energy = MAX_ENERGY; // Full energy khi về base
+    player.energy = maxEnergy; // Full energy khi về base
   } else if (player.isAtBase) {
     // Nạp năng lượng nếu về căn cứ (không mang treasure)
-    player.energy = MAX_ENERGY;
+    player.energy = maxEnergy;
   }
 
   emitPlayerMove(gameState.gameId, player.playerId, player.position);
@@ -455,7 +478,8 @@ const processTrap = (gameState: GameState, player: PlayerState, data: { position
   const { position, danger } = data;
 
   // Kiểm tra xem game có cho phép đặt bẫy không
-  const enableTraps = gameState.settings?.enableTraps ?? ENABLE_TRAPS;
+  const settings = getSettingsFromState(gameState);
+  const enableTraps = settings.enableTraps ?? ENABLE_TRAPS;
   if (!enableTraps) {
     console.log(`⚠️  Traps are disabled for game ${gameState.gameId}`);
     return;
@@ -525,7 +549,10 @@ const processTrap = (gameState: GameState, player: PlayerState, data: { position
  * Xử lý nghỉ ngơi
  */
 const processRest = (gameState: GameState, player: PlayerState) => {
-  player.energy = Math.min(player.energy + ENERGY_RESTORE, MAX_ENERGY);
+  const settings = getSettingsFromState(gameState);
+  const energyRestore = settings.energyRestore ?? ENERGY_RESTORE;
+  const maxEnergy = settings.maxEnergy ?? MAX_ENERGY;
+  player.energy = Math.min(player.energy + energyRestore, maxEnergy);
   emitEnergyUpdate(gameState.gameId, player.playerId, player.energy);
 };
 
@@ -534,11 +561,13 @@ const processRest = (gameState: GameState, player: PlayerState) => {
  */
 const handleCollision = (gameState: GameState, attacker: PlayerState, victim: PlayerState, playersRammedThisTick: Set<string>) => {
   const victimPosition = { ...victim.position };
+  const settings = getSettingsFromState(gameState);
+  const maxEnergy = settings.maxEnergy ?? MAX_ENERGY;
   
   // Nạn nhân về căn cứ - sử dụng baseIndex từ victim state
   const baseIndex = victim.baseIndex ?? 0; // Default to 0 if not set
   victim.position = { ...gameState.map.bases[baseIndex] };
-  victim.energy = MAX_ENERGY;
+  victim.energy = maxEnergy;
   victim.isAtBase = true;
 
   // Mark victim as rammed to cancel remaining actions this tick
@@ -622,19 +651,23 @@ const updateMapState = (gameState: GameState) => {
  * @param gameState - Current game state
  * @returns true if game should end, false otherwise
  */
-const shouldEndGame = (gameState: GameState): boolean => {
+const shouldEndGame = (gameState: GameState, settings?: any): boolean => {
+  const effectiveSettings = settings || getSettingsFromState(gameState);
+  const timeLimitMs = effectiveSettings.timeLimitMs ?? TIME_LIMIT_MS;
+  const maxTurns = effectiveSettings.maxTurns ?? MAX_TURNS;
+  
   // Kiểm tra thời gian chơi
   if (gameState.startTime) {
     const elapsed = Date.now() - gameState.startTime;
-    if (elapsed >= TIME_LIMIT_MS) {
-      console.log(`⏰ Game ${gameState.gameId} time limit reached: ${elapsed}ms >= ${TIME_LIMIT_MS}ms`);
+    if (elapsed >= timeLimitMs) {
+      console.log(`⏰ Game ${gameState.gameId} time limit reached: ${elapsed}ms >= ${timeLimitMs}ms`);
       return true;
     }
   }
 
   // Hết số lượt
-  if (gameState.currentTurn >= MAX_TURNS) {
-    console.log(`🏁 Game ${gameState.gameId} max turns reached: ${gameState.currentTurn} >= ${MAX_TURNS}`);
+  if (gameState.currentTurn >= maxTurns) {
+    console.log(`🏁 Game ${gameState.gameId} max turns reached: ${gameState.currentTurn} >= ${maxTurns}`);
     return true;
   }
 

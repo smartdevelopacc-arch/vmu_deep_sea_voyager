@@ -67,7 +67,8 @@ const GameSchema = new Schema<IGame>({
             maxEnergy: { type: Number },
             energyRestore: { type: Number },
             maxTurns: { type: Number },
-            timeLimitMs: { type: Number }
+            timeLimitMs: { type: Number },
+            tickIntervalMs: { type: Number } // ✅ ADDED - was missing from schema!
         },
         default: {}
     }

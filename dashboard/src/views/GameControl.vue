@@ -8,7 +8,6 @@
       <button @click="handleStop" class="btn btn-danger" :disabled="!isActive">⏹️ Stop Game</button>
       <button @click="handleReset" class="btn btn-warning" :disabled="isActive">🔄 Reset Game</button>
       <router-link :to="`/game/${gameId}/settings`" class="btn btn-secondary">⚙️ Settings</router-link>
-      <router-link :to="`/game/${gameId}/map-editor`" class="btn btn-secondary">🗺️ Map Editor</router-link>
       <router-link to="/games" class="btn btn-secondary">← Back to Games</router-link>
     </div>
 
@@ -41,8 +40,9 @@
                     class="team-logo"
                   />
                   <span class="player-badge" :style="{ backgroundColor: getPlayerColor(row) }">
-                    {{ row.teamName || row.name || row.code || row.playerId }}
+                    {{ row.displayName || row.teamName || row.name || row.code || row.playerId }}
                   </span>
+                  <div v-if="row.slogan" class="team-slogan">“{{ row.slogan }}”</div>
                 </div>
               </td>
               <td class="score-cell">{{ row.score }}</td>
@@ -328,6 +328,10 @@ const finishedLeaderboard = computed(() => {
       playersById[p.playerId] = p
       playerOriginalIndex[p.playerId] = idx
     }
+    
+    // Debug: Check what's in playersById
+    console.log('🏆 finishedLeaderboard - playersById:', playersById);
+    
     // Also enrich from global players store (may have names/teamName)
     const globalByCode: Record<string, any> = {}
     for (const gp of playerStore.players || []) {
@@ -337,19 +341,28 @@ const finishedLeaderboard = computed(() => {
       .sort((a, b) => b.score - a.score)
       .map(s => {
         const playerCode = playersById[s.playerId]?.code || s.playerId
+        const displayName =
+          playersById[s.playerId]?.teamName ||
+          playersById[s.playerId]?.name ||
+          globalByCode[playerCode]?.teamName ||
+          globalByCode[playerCode]?.name ||
+          playerCode ||
+          s.playerId
+        const slogan =
+          playersById[s.playerId]?.slogan ||
+          globalByCode[playerCode]?.slogan ||
+          ''
+        console.log(`🏆 Player ${s.playerId} slogan: "${slogan}" (from playersById: "${playersById[s.playerId]?.slogan}" or globalByCode: "${globalByCode[playerCode]?.slogan}")`);
         return {
           playerId: s.playerId,
           score: s.score,
           code: playerCode,
-          teamName: playerCode,
+          teamName: displayName,
           teamLogo: playerCode ? `/dashboard/players/${playerCode}.png` : null,
           originalIndex: playerOriginalIndex[s.playerId] ?? 0,
-          name:
-            playersById[s.playerId]?.teamName ||
-            playersById[s.playerId]?.name ||
-            globalByCode[playerCode]?.teamName ||
-            globalByCode[playerCode]?.name ||
-            undefined
+          name: displayName,
+          displayName,
+          slogan
         }
       })
   }
@@ -364,10 +377,12 @@ const finishedLeaderboard = computed(() => {
       playerId: p.playerId,
       score: p.score || 0,
       code: p.code,
-      teamName: p.code,
+      teamName: p.teamName || p.name || globalByCode[p.code]?.teamName || globalByCode[p.code]?.name || p.code,
       teamLogo: p.code ? `/dashboard/players/${p.code}.png` : null,
       originalIndex,
-      name: p.teamName || p.name || globalByCode[p.code]?.teamName || globalByCode[p.code]?.name
+      name: p.teamName || p.name || globalByCode[p.code]?.teamName || globalByCode[p.code]?.name,
+      displayName: p.teamName || p.name || globalByCode[p.code]?.teamName || globalByCode[p.code]?.name || p.code || p.playerId,
+      slogan: p.slogan || globalByCode[p.code]?.slogan || ''
     }))
     .sort((a: any, b: any) => b.score - a.score)
 })
@@ -439,6 +454,9 @@ onMounted(() => {
       isActive.value = false
       stopCountdown()
       console.log('🏁 Game status changed to finished, stopping countdown and disabling active state')
+      // ✅ FETCH PLAYERS TO GET SLOGAN DATA from Player collection for leaderboard display
+      console.log('🏁 Fetching players data for leaderboard display...')
+      playerStore.fetchPlayers()
     }
   })
   
@@ -613,6 +631,13 @@ onUnmounted(() => {
 
 .finished-leaderboard .score-cell {
   font-weight: 600;
+}
+
+.finished-leaderboard .team-slogan {
+  font-size: 12px;
+  color: #4b5563;
+  margin-top: 4px;
+  font-style: italic;
 }
 
 .info-grid {

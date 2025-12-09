@@ -7,6 +7,7 @@
       :error="error"
       @start="startGame"
       @stop="stopGame"
+      @delete="deleteGame"
     >
       <template #actions>
         <router-link to="/games/create" class="btn btn-success">➕ Create Game</router-link>
@@ -49,6 +50,20 @@ const stopGame = async (gameId: string) => {
     alert(`Game ${gameId} stopped!`)
   } catch (err) {
     alert(`Failed to stop game: ${err}`)
+  }
+}
+
+const deleteGame = async (gameId: string) => {
+  if (!confirm(`Are you sure you want to delete game "${gameId}"? This action cannot be undone.`)) {
+    return
+  }
+  
+  try {
+    await gameStore.deleteGame(gameId)
+    alert(`Game ${gameId} deleted successfully!`)
+    await fetchGames()
+  } catch (err) {
+    alert(`Failed to delete game: ${err}`)
   }
 }
 

@@ -11,6 +11,10 @@ const getPlayers = async (req, res) => {
         }
         const players = game.players.map((p) => ({
             playerId: p.code || p.playerId, // DB schema uses 'code' field
+            code: p.code, // ✅ INCLUDE CODE for matching in dashboard
+            name: p.name, // ✅ INCLUDE NAME
+            logo: p.logo, // ✅ INCLUDE LOGO
+            slogan: p.slogan, // ✅ INCLUDE SLOGAN
             position: p.position,
             energy: p.energy,
             carriedTreasure: p.carriedTreasure,

@@ -7,6 +7,7 @@
       <div class="nav-links">
         <router-link to="/">Dashboard</router-link>
         <router-link to="/players">Players</router-link>
+        <router-link to="/maps">Maps</router-link>
         <router-link to="/games">Games</router-link>
       </div>
     </nav>

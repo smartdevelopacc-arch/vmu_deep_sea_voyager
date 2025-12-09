@@ -28,6 +28,7 @@
               <router-link :to="`/game/${game.gameId}`" class="btn btn-sm btn-primary">View</router-link>
               <button v-if="!game.isActive && game.status !== 'finished'" @click="$emit('start', game.gameId)" class="btn btn-sm btn-success">▶️</button>
               <button v-if="game.isActive" @click="$emit('stop', game.gameId)" class="btn btn-sm btn-danger">⏹️</button>
+              <button @click="$emit('delete', game.gameId)" class="btn btn-sm btn-delete" title="Delete game">🗑️</button>
             </td>
           </tr>
         </tbody>
@@ -68,5 +69,7 @@ code { background: #f0f0f0; padding: 2px 6px; border-radius: 3px; }
 .btn-primary { background: #3b82f6; color: white; }
 .btn-success { background: #22c55e; color: white; }
 .btn-danger { background: #ef4444; color: white; }
+.btn-delete { background: #dc2626; color: white; }
+.btn-delete:hover { background: #b91c1c; }
 .row-actions { display: flex; gap: 4px; }
 </style>

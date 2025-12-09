@@ -6,13 +6,14 @@ import { connectDB } from './core/db';
 import { setupSocket } from './socket';
 import routes from './routes';
 import { importPlayers } from './core/playerImporter';
+import { startRateLimitCleanup } from './core/rateLimitMiddleware';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Middleware
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Serve dashboard static files (production)
 const dashboardPath = path.join(__dirname, '../dashboard/dist');
@@ -54,11 +55,15 @@ const startServer = async () => {
     // Import players từ thư mục assets/players/
     await importPlayers();
     
+    // Start rate limit cleanup
+    startRateLimitCleanup();
+    
     httpServer.listen(PORT, () => {
       console.log(`🚀 API Server running on port ${PORT}`);
       console.log(`📡 WebSocket server ready`);
       console.log(`🎮 Game Loop Worker integrated`);
       console.log(`💡 Worker và Server chia sẻ Socket.IO instance`);
+      console.log(`🔒 Rate limit: ${process.env.PLAYER_ACTIONS_PER_SECOND || 5} actions/second per player`);
       console.log(`\n📋 API Routes:`);
       console.log(`   - Client API: http://localhost:${PORT}/api/game/*`);
     });

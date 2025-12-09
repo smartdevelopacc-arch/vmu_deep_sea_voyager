@@ -120,7 +120,6 @@ export async function importMaps(options?: { verbose?: boolean; skipDuplicates?:
           disable: false,
           terrain: mapData.terrain,
           treasures: mapData.treasures,
-          traps: mapData.traps,
           bases: mapData.bases,
           waves: mapData.waves || Array(mapData.height).fill(null).map(() => Array(mapData.width).fill(2)),
           owners: mapData.owners,

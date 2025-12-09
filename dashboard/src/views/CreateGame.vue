@@ -31,53 +31,79 @@
       <div class="form-section">
         <h2>Map Configuration</h2>
         
-        <div class="form-group">
-          <label>Select from Map Bank *</label>
-          <select v-model="selectedMapCode" @change="loadMapFromBank">
-            <option value="">-- Choose a map --</option>
-            <option v-for="map in availableMaps" :key="map.code" :value="map.code">
-              {{ map.name }} ({{ map.width }}x{{ map.height }})
-            </option>
-          </select>
+        <div class="map-tabs">
+          <button 
+            type="button"
+            class="tab-button" 
+            :class="{ active: mapConfigMode === 'bank' }"
+            @click="switchMapMode('bank')"
+          >
+            📚 From Map Bank
+          </button>
+          <button 
+            type="button"
+            class="tab-button" 
+            :class="{ active: mapConfigMode === 'custom' }"
+            @click="switchMapMode('custom')"
+          >
+            ✏️ Custom Size
+          </button>
         </div>
 
-        <div class="divider">OR</div>
-
-        <div class="form-row">
+        <div v-if="mapConfigMode === 'bank'" class="tab-content">
           <div class="form-group">
-            <label for="width">Width *</label>
-            <input 
-              v-model.number="form.mapSize.width" 
-              id="width" 
-              type="number" 
-              min="10" 
-              max="100"
-              required
-            />
+            <label>Select Map *</label>
+            <select v-model="selectedMapCode" @change="loadMapFromBank">
+              <option value="">-- Choose a map --</option>
+              <option v-for="map in availableMaps" :key="map.code" :value="map.code">
+                {{ map.name }} ({{ map.width }}x{{ map.height }})
+              </option>
+            </select>
           </div>
-
-          <div class="form-group">
-            <label for="height">Height *</label>
-            <input 
-              v-model.number="form.mapSize.height" 
-              id="height" 
-              type="number" 
-              min="10" 
-              max="100"
-              required
-            />
+          
+          <div v-if="selectedMapData" class="map-preview-info">
+            <p><strong>{{ selectedMapData.name }}</strong></p>
+            <p class="hint">{{ selectedMapData.width }}x{{ selectedMapData.height }} - {{ selectedMapData.description }}</p>
           </div>
         </div>
 
-        <div class="form-group">
-          <label>Map Template</label>
-          <select v-model="selectedTemplate" @change="applyTemplate">
-            <option value="">Custom (Manual)</option>
-            <option value="small">Small (30x30)</option>
-            <option value="medium">Medium (40x40)</option>
-            <option value="large">Large (50x50)</option>
-            <option value="extra">Extra (100x100)</option>
-          </select>
+        <div v-if="mapConfigMode === 'custom'" class="tab-content">
+          <div class="form-group">
+            <label>Map Template</label>
+            <select v-model="selectedTemplate" @change="applyTemplate">
+              <option value="">Custom (Manual)</option>
+              <option value="small">Small (30x30)</option>
+              <option value="medium">Medium (40x40)</option>
+              <option value="large">Large (50x50)</option>
+              <option value="extra">Extra (100x100)</option>
+            </select>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="width">Width *</label>
+              <input 
+                v-model.number="form.mapSize.width" 
+                id="width" 
+                type="number" 
+                min="10" 
+                max="100"
+                required
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="height">Height *</label>
+              <input 
+                v-model.number="form.mapSize.height" 
+                id="height" 
+                type="number" 
+                min="10" 
+                max="100"
+                required
+              />
+            </div>
+          </div>
         </div>
       </div>
 
@@ -137,6 +163,7 @@ const form = ref({
   selectedPlayers: [] as any[]
 })
 
+const mapConfigMode = ref<'bank' | 'custom'>('bank')
 const selectedTemplate = ref('')
 const selectedMapCode = ref('')
 const availableMaps = ref<any[]>([])
@@ -175,6 +202,7 @@ const fetchMaps = async () => {
   try {
     const response = await adminAPI.getMaps()
     availableMaps.value = response.data
+    console.log('📍 Available maps loaded:', availableMaps.value.length, availableMaps.value)
   } catch (err: any) {
     console.error('Failed to fetch maps:', err)
   }
@@ -186,8 +214,21 @@ const loadMapFromBank = async () => {
     return
   }
 
+  console.log('🗺️ Loading map from bank:', selectedMapCode.value)
+  error.value = ''
+
   try {
     const response = await adminAPI.getMapById(selectedMapCode.value)
+    console.log('✅ Map loaded successfully:', response.data)
+    console.log('📊 Map structure:', {
+      code: response.data.code,
+      width: response.data.width,
+      height: response.data.height,
+      hasTerrainData: !!response.data.terrain,
+      hasWavesData: !!response.data.waves,
+      hasTreasuresData: !!response.data.treasures,
+      hasBasesData: !!response.data.bases
+    })
     selectedMapData.value = response.data
     form.value.mapSize = {
       width: response.data.width,
@@ -196,14 +237,14 @@ const loadMapFromBank = async () => {
     selectedTemplate.value = ''
   } catch (err: any) {
     error.value = 'Failed to load map from bank'
-    console.error(err)
+    console.error('❌ Failed to load map:', err.message)
+    console.error('📋 Error response:', err.response?.data)
+    console.error('📋 Error status:', err.response?.status)
+    console.error('📋 Full error:', err)
   }
 }
 
 const applyTemplate = () => {
-  selectedMapCode.value = ''
-  selectedMapData.value = null
-  
   const templates: Record<string, any> = {
     small: { width: 30, height: 30 },
     medium: { width: 40, height: 40 },
@@ -216,17 +257,30 @@ const applyTemplate = () => {
   }
 }
 
+const switchMapMode = (mode: 'bank' | 'custom') => {
+  mapConfigMode.value = mode
+  if (mode === 'bank') {
+    // When switching to bank mode, clear custom settings
+    selectedTemplate.value = ''
+  } else {
+    // When switching to custom mode, clear bank selection
+    selectedMapCode.value = ''
+    selectedMapData.value = null
+  }
+}
+
 const generateMap = () => {
-  // If using map from bank, use it directly
-  if (selectedMapData.value) {
+  // If using map from bank AND we're in bank mode, use it directly
+  if (mapConfigMode.value === 'bank' && selectedMapData.value) {
+    console.log('🗺️ Using map from bank:', selectedMapData.value.code)
     const mapData = {
       width: selectedMapData.value.width,
       height: selectedMapData.value.height,
-      terrain: selectedMapData.value.terrain,
-      waves: selectedMapData.value.waves,
-      treasures: selectedMapData.value.treasures,
-      traps: selectedMapData.value.traps,
-      bases: selectedMapData.value.bases || []
+      terrain: selectedMapData.value.terrain || [],
+      waves: selectedMapData.value.waves || [],
+      treasures: selectedMapData.value.treasures || [],
+      bases: selectedMapData.value.bases || [],
+      owners: selectedMapData.value.owners || []
     }
     
     // Ensure we have enough bases for all players
@@ -239,6 +293,7 @@ const generateMap = () => {
   }
 
   // Otherwise generate custom map
+  console.log('📝 Generating custom map in', mapConfigMode.value, 'mode')
   const { width, height } = form.value.mapSize
   const numPlayers = form.value.selectedPlayers.length
   
@@ -264,8 +319,10 @@ const generateMap = () => {
   )
   
   const bases = generateBasesForPlayers(width, height, numPlayers)
+  // Owners grid empty by default for custom map
+  const owners = Array(height).fill(0).map(() => Array(width).fill(''))
   
-  return { width, height, treasures, bases }
+  return { width, height, treasures, bases, owners }
 }
 
 const generateBasesForPlayers = (width: number, height: number, numPlayers: number) => {
@@ -373,6 +430,64 @@ onMounted(() => {
   color: #333;
   border-bottom: 2px solid #f0f0f0;
   padding-bottom: 8px;
+}
+
+.map-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 20px;
+  border-bottom: 2px solid #e0e0e0;
+}
+
+.tab-button {
+  flex: 1;
+  padding: 12px 20px;
+  border: none;
+  background: transparent;
+  color: #666;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  transition: all 0.2s;
+}
+
+.tab-button:hover {
+  color: #3b82f6;
+  background: #f8f9fa;
+}
+
+.tab-button.active {
+  color: #3b82f6;
+  border-bottom-color: #3b82f6;
+  background: #f8fbff;
+}
+
+.tab-content {
+  animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.map-preview-info {
+  margin-top: 15px;
+  padding: 15px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  border-left: 3px solid #3b82f6;
+}
+
+.map-preview-info p {
+  margin: 5px 0;
 }
 
 .divider {

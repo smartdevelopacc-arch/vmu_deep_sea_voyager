@@ -275,14 +275,41 @@ router.post('/game/:gameId/start', async (req, res) => {
 });
 
 /**
- * POST /worker/game/:gameId/stop
- * Dừng game loop
+ * POST /admin/game/:gameId/stop
+ * Stop game loop (game vẫn tồn tại, chỉ dừng chạy)
  */
 router.post('/game/:gameId/stop', async (req, res) => {
   try {
     const { gameId } = req.params;
     await stopGame(gameId);
     res.json({ success: true, gameId, message: 'Game loop stopped' });
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+/**
+ * DELETE /admin/game/:gameId
+ * Delete game completely from database
+ */
+router.delete('/game/:gameId', async (req, res) => {
+  try {
+    const { gameId } = req.params;
+    
+    // Stop game first if it's running
+    try {
+      await stopGame(gameId);
+    } catch (err) {
+      // Ignore if already stopped
+    }
+    
+    // Delete from database
+    const game = await GameModel.findOneAndDelete({ code: gameId });
+    if (!game) {
+      return res.status(404).json({ error: 'Game not found' });
+    }
+    
+    res.json({ success: true, gameId, message: 'Game deleted successfully' });
   } catch (error: any) {
     res.status(400).json({ error: error.message });
   }
@@ -425,6 +452,8 @@ router.get('/game/:gameId/state', async (req, res) => {
         code: p.code || p.playerId,
         playerId: p.code || p.playerId,
         name: p.name,
+        logo: p.logo, // ✅ INCLUDE LOGO
+        slogan: p.slogan, // ✅ INCLUDE SLOGAN
         position: p.position,
         energy: p.energy,
         score: p.score || 0,

@@ -12,14 +12,13 @@ const apiClient = axios.create({
 
 // ✅ NEW: Add interceptor to include API key for admin endpoints
 apiClient.interceptors.request.use((config) => {
-  // Add API key header for admin and player management endpoints
-  if (config.url?.includes('/admin/') || config.url?.includes('/players/')) {
-    config.headers['x-api-key'] = apiKey;
+  // Always attach API key if present; required for admin routes and some game routes
+  if (apiKey) {
+    config.headers = config.headers || {};
+    (config.headers as any)['x-api-key'] = apiKey;
   }
   return config;
-}, (error) => {
-  return Promise.reject(error);
-});
+}, (error) => Promise.reject(error));
 
 // Admin API endpoints
 export const adminAPI = {
@@ -33,6 +32,7 @@ export const adminAPI = {
   initGame: (data: any) => apiClient.post('/admin/game/init', data),
   startGame: (gameId: string) => apiClient.post(`/admin/game/${gameId}/start`),
   stopGame: (gameId: string) => apiClient.post(`/admin/game/${gameId}/stop`),
+  deleteGame: (gameId: string) => apiClient.delete(`/admin/game/${gameId}`),
   resetGame: (gameId: string) => apiClient.post(`/admin/game/${gameId}/reset`),
   getLoopStatus: (gameId: string) => apiClient.get(`/admin/game/${gameId}/loop-status`),
   

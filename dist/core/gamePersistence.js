@@ -13,6 +13,7 @@ const saveGameState = async (gameState) => {
             code: p.code || p.playerId,
             name: p.name || `Player ${p.playerId}`,
             logo: p.logo,
+            slogan: p.slogan, // ✅ INCLUDE SLOGAN - was missing!
             playerId: p.playerId,
             position: p.position,
             energy: p.energy,
@@ -42,10 +43,18 @@ const saveGameState = async (gameState) => {
             existingGame.status = gameState.status;
             existingGame.currentTurn = gameState.currentTurn;
             existingGame.players = playersArray;
-            // Cập nhật settings nếu có
-            if (gameState.settings) {
+            // ✅ PRESERVE SETTINGS - if gameState has settings, update; otherwise keep existing
+            if (gameState.settings && Object.keys(gameState.settings).length > 0) {
                 existingGame.settings = gameState.settings;
+                console.log(`[DEBUG] 📝 Updated settings:`, gameState.settings);
             }
+            else if (!existingGame.settings) {
+                // Ensure settings object exists even if empty
+                existingGame.settings = {};
+            }
+            // If gameState.settings is empty but DB has settings, keep DB settings (markModified will preserve it)
+            // Make sure Mongoose knows settings may have changed
+            existingGame.markModified('settings');
             // Save to runtimeState if playing, otherwise to map
             if (gameState.status === 'playing') {
                 existingGame.runtimeState = {
@@ -160,6 +169,8 @@ const loadGameState = async (gameId) => {
                 playerId: playerId,
                 code: p.code || playerId, // ✅ ENHANCED: Include code for leaderboard display
                 name: p.name || `Player ${p.code || playerId}`, // ✅ ENHANCED: Include name for UI
+                logo: p.logo, // ✅ ENHANCED: Include logo
+                slogan: p.slogan, // ✅ ENHANCED: Include slogan for leaderboard
                 position: playerPosition,
                 energy: p.energy || 100,
                 carriedTreasure: p.carriedTreasure,
@@ -234,6 +245,7 @@ const loadGameState = async (gameId) => {
             actionQueue: [],
             settings: game.settings || {}
         };
+        console.log(`[DEBUG] 📋 Loaded game ${gameId} settings from DB:`, gameState.settings);
         return gameState;
     }
     catch (error) {

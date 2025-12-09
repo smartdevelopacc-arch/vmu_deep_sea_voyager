@@ -454,10 +454,10 @@ class TestBot {
         console.log(`📤 Action data:`, JSON.stringify(action.data));
       }
       
-      // ✅ NEW: Include player-secret header for authentication
-      const playerSecret = process.env.PLAYER_SECRET;
+      // Use player-secret from config or environment (config takes priority)
+      const playerSecret = this.config.playerSecret || process.env.PLAYER_SECRET;
       if (!playerSecret) {
-        console.error(`❌ PLAYER_SECRET not set in environment`);
+        console.error(`❌ PLAYER_SECRET not provided (via config or env)`);
         return;
       }
 
@@ -485,16 +485,19 @@ class TestBot {
  * Command Line Interface for TestBot
  * 
  * Usage:
- *   npm start <gameId>
+ *   npm start <gameId> [playerId] [apiUrl] [intervalMs]
  * 
- * Environment Variables (.env):
- *   PLAYER_ID       - Bot's player identifier (default: 'team_alpha')
- *   API_URL         - Game server API endpoint (default: 'http://localhost:3000/api')
- *   ACTION_INTERVAL - Milliseconds between actions (default: 1000)
+ * Positional args override environment variables (.env is supported):
+ *   GAME_ID          - Game identifier (used when no gameId arg)
+ *   PLAYER_ID        - Bot's player identifier (default: 'team_alpha')
+ *   API_URL          - Game server API endpoint (default: 'http://localhost:3000/api')
+ *   ACTION_INTERVAL  - Milliseconds between actions (default: 1000)
+ *   PLAYER_SECRET    - Required for authenticated actions
  * 
  * Examples:
  *   npm start game-001
- *   npm start test001
+ *   npm start game-001 team_alpha
+ *   npm start game-001 team_alpha http://localhost:3000/api 1200
  * 
  * The bot will:
  * 1. Connect to the specified game
@@ -502,29 +505,69 @@ class TestBot {
  * 3. Run until game ends or CTRL+C is pressed
  */
 
-const args = process.argv.slice(2);
-
-if (args.length < 1) {
+const showUsage = () => {
   console.log(`
-Usage: npm start <gameId>
+Usage:
+  npm start <gameId> [playerId] [apiUrl] [intervalMs]
 
-Configuration is loaded from .env file:
-  PLAYER_ID     - Your player ID (e.g., team_alpha)
-  API_URL       - API endpoint URL (default: http://localhost:3000/api)
-  ACTION_INTERVAL - Milliseconds between actions (default: 1000)
+Positional args override env vars (.env supported):
+  GAME_ID, PLAYER_ID, API_URL, ACTION_INTERVAL, PLAYER_SECRET
 
 Examples:
   npm start game-001
-  npm start test001
+  npm start game-001 team_alpha
+  npm start game-001 team_alpha http://localhost:3000/api 1200
+
+Note: With npm, pass args after -- to be safe:
+  npm start -- game-001 team_alpha
   `);
+};
+
+const npmArgs = (() => {
+  const raw = process.env.npm_config_argv;
+  if (!raw) return [] as string[];
+  try {
+    const parsed = JSON.parse(raw);
+    const original: string[] = parsed.original || [];
+    const startIdx = original.findIndex(v => v === 'start');
+    if (startIdx >= 0) return original.slice(startIdx + 1);
+    return original.slice(2); // fallback
+  } catch {
+    return [] as string[];
+  }
+})();
+
+let args = process.argv.slice(2);
+if (args.length === 0 && npmArgs.length > 0) {
+  args = npmArgs;
+}
+
+if (args.includes('--help') || args.includes('-h')) {
+  showUsage();
+  process.exit(0);
+}
+
+const [gameIdArg, playerIdArg, apiUrlArg, intervalArg] = args;
+const gameId = gameIdArg || process.env.GAME_ID;
+
+if (!gameId) {
+  showUsage();
   process.exit(1);
 }
 
-// Parse configuration from environment and arguments
-const [gameId] = args;
-const playerId = process.env.PLAYER_ID || 'team_alpha';
-const apiUrl = process.env.API_URL || 'http://localhost:3000/api';
-const actionInterval = parseInt(process.env.ACTION_INTERVAL || '1000');
+// Parse configuration from environment and arguments (args override env)
+const playerId = playerIdArg || process.env.PLAYER_ID || 'team_alpha';
+const apiUrl = apiUrlArg || process.env.API_URL || 'http://localhost:3000/api';
+
+const intervalFromArg = intervalArg ? parseInt(intervalArg, 10) : NaN;
+const intervalFromEnv = process.env.ACTION_INTERVAL ? parseInt(process.env.ACTION_INTERVAL, 10) : NaN;
+const actionInterval = Number.isFinite(intervalFromArg)
+  ? intervalFromArg
+  : (Number.isFinite(intervalFromEnv) ? intervalFromEnv : 1000);
+
+if (!Number.isFinite(intervalFromArg) && intervalArg) {
+  console.warn(`⚠️  Invalid interval "${intervalArg}", falling back to ${actionInterval}ms`);
+}
 
 // Create and configure bot instance
 const bot = new TestBot({

@@ -45,7 +45,7 @@ export const getCompleteGameState = async (req: Request, res: Response) => {
     const game = await GameModel.findOne({ code: gameId });
 
     // Convert players Map to array
-    // ✅ ENHANCED: Include name/teamName for leaderboard display by enriching from DB
+    // ✅ ENHANCED: Include name/teamName/slogan for leaderboard display by enriching from DB
     const playersArray = Array.from(gameState.players.values()).map((p: any, index: number) => {
       // Get enriched player info from DB if available
       const dbPlayer = game?.players?.[index];
@@ -54,11 +54,13 @@ export const getCompleteGameState = async (req: Request, res: Response) => {
         playerId: p.playerId,
         code: p.code,
         name: p.name || dbPlayer?.name || p.code, // Use name from runtime state first, fallback to DB
+        logo: dbPlayer?.logo || p.logo, // Include team logo
         position: p.position,
         energy: p.energy,
         score: p.score,
         carriedTreasure: p.carriedTreasure || 0,
-        trapCount: p.trapCount || 0
+        trapCount: p.trapCount || 0,
+        slogan: dbPlayer?.slogan || p.slogan || '' // ✅ INCLUDE SLOGAN from DB player
       };
     });
 

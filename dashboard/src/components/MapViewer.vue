@@ -256,9 +256,9 @@ const getCellStyle = (x: number, y: number) => {
     }
   }
   
-  // Wave energy - màu xanh với độ đậm nhạt (0-5)
+  // Wave energy - màu xanh với độ đậm nhất (0-5)
   const wave = props.mapData?.waves?.[y]?.[x] ?? 0
-  const opacity = 0.1 + (wave / 5) * 0.5 // 0→0.1, 5→0.6
+  const opacity = 0.02 + (wave / 5) * 0.93 // 0→0.02, 5→0.95 (much darker/more saturated)
   
   return {
     backgroundColor: `rgba(59, 130, 246, ${opacity})` // Blue with varying opacity
@@ -647,28 +647,28 @@ const getCellTitle = (x: number, y: number) => {
 }
 
 .wave-0 {
-  background: rgba(59, 130, 246, 0.1);
+  background: rgba(59, 130, 246, 0.02);
   color: #333;
 }
 
 .wave-1 {
-  background: rgba(59, 130, 246, 0.2);
+  background: rgba(59, 130, 246, 0.21);
   color: #333;
 }
 
 .wave-2 {
-  background: rgba(59, 130, 246, 0.32);
+  background: rgba(59, 130, 246, 0.40);
 }
 
 .wave-3 {
-  background: rgba(59, 130, 246, 0.44);
+  background: rgba(59, 130, 246, 0.59);
 }
 
 .wave-4 {
-  background: rgba(59, 130, 246, 0.56);
+  background: rgba(59, 130, 246, 0.78);
 }
 
 .wave-5 {
-  background: rgba(59, 130, 246, 0.68);
+  background: rgba(59, 130, 246, 0.95);
 }
 </style>

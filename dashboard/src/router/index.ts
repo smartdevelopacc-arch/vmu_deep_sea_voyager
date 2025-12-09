@@ -5,7 +5,7 @@ import Games from '../views/Games.vue'
 import GameControl from '../views/GameControl.vue'
 import CreateGame from '../views/CreateGame.vue'
 import GameSettings from '../views/GameSettings.vue'
-import MapEditor from '../views/MapEditor.vue'
+import Maps from '../views/Maps.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -46,9 +46,9 @@ const router = createRouter({
       component: GameSettings
     },
     {
-      path: '/game/:id/map-editor',
-      name: 'map-editor',
-      component: MapEditor
+      path: '/maps',
+      name: 'maps',
+      component: Maps
     }
   ]
 })

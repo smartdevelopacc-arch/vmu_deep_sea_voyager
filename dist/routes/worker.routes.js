@@ -10,14 +10,32 @@ router.use(adminAuthMiddleware_1.validateAdminApiKey);
 /**
  * Generate random terrain: -1 cho đảo, 0 cho biển
  * Tỷ lệ đảo: ~15%
+ * ✅ Rule: Đảo không được đặt trên base
  */
-function generateRandomTerrain(width, height) {
+function generateRandomTerrain(width, height, bases) {
+    // Convert bases to Set for faster lookup
+    const baseSet = new Set();
+    if (bases) {
+        bases.forEach(base => {
+            const x = Array.isArray(base) ? base[0] : base.x;
+            const y = Array.isArray(base) ? base[1] : base.y;
+            baseSet.add(`${x},${y}`);
+        });
+    }
     const terrain = [];
     for (let y = 0; y < height; y++) {
         const row = [];
         for (let x = 0; x < width; x++) {
-            // 15% chance là đảo (-1), còn lại là biển (0)
-            row.push(Math.random() < 0.15 ? -1 : 0);
+            // ✅ Check if this position is a base
+            const isBase = baseSet.has(`${x},${y}`);
+            if (isBase) {
+                // Base positions must be sea (0), never island (-1)
+                row.push(0);
+            }
+            else {
+                // 15% chance là đảo (-1), còn lại là biển (0)
+                row.push(Math.random() < 0.15 ? -1 : 0);
+            }
         }
         terrain.push(row);
     }
@@ -52,8 +70,9 @@ function generateRandomWaves(width, height) {
 /**
  * Generate treasures: giá trị cao hơn ở gần tâm, số lượng = 20% * N (với map NxN)
  * Giá trị: 100, 80, 50, 30, 10 (càng gần tâm càng cao)
+ * ✅ Rule: Kho báu không được đặt trên đảo (terrain=-1)
  */
-function generateRandomTreasures(width, height) {
+function generateRandomTreasures(width, height, terrain) {
     const treasures = Array(height).fill(0).map(() => Array(width).fill(0));
     const centerX = width / 2;
     const centerY = height / 2;
@@ -78,6 +97,9 @@ function generateRandomTreasures(width, height) {
         if (x < 0 || x >= width || y < 0 || y >= height)
             continue;
         if (treasures[y][x] > 0)
+            continue;
+        // ✅ Check if this position is an island (terrain=-1)
+        if (terrain && terrain[y]?.[x] === -1)
             continue;
         // Tính khoảng cách thực tế từ tâm
         const distX = x - centerX;
@@ -163,7 +185,8 @@ router.post('/game/init', async (req, res) => {
         let processedMapData = { ...mapData };
         if (!processedMapData.terrain || processedMapData.terrain.length === 0) {
             const { width, height } = processedMapData;
-            processedMapData.terrain = generateRandomTerrain(width, height);
+            // ✅ Pass bases to avoid placing islands on base positions
+            processedMapData.terrain = generateRandomTerrain(width, height, processedMapData.bases);
         }
         // Auto-generate obstacles từ terrain (để backward compatible)
         if (!processedMapData.obstacles || processedMapData.obstacles.length === 0) {
@@ -177,7 +200,8 @@ router.post('/game/init', async (req, res) => {
         // Auto-generate treasures nếu không có (20% kích thước, giá trị cao ở tâm)
         if (!processedMapData.treasures || processedMapData.treasures.length === 0) {
             const { width, height } = processedMapData;
-            processedMapData.treasures = generateRandomTreasures(width, height);
+            // ✅ Pass terrain to avoid placing treasures on islands
+            processedMapData.treasures = generateRandomTreasures(width, height, processedMapData.terrain);
         }
         // Auto-generate bases nếu không có (2 bases ở góc)
         if (!processedMapData.bases || processedMapData.bases.length === 0) {
@@ -221,14 +245,39 @@ router.post('/game/:gameId/start', async (req, res) => {
     }
 });
 /**
- * POST /worker/game/:gameId/stop
- * Dừng game loop
+ * POST /admin/game/:gameId/stop
+ * Stop game loop (game vẫn tồn tại, chỉ dừng chạy)
  */
 router.post('/game/:gameId/stop', async (req, res) => {
     try {
         const { gameId } = req.params;
         await (0, gameLoop_1.stopGame)(gameId);
         res.json({ success: true, gameId, message: 'Game loop stopped' });
+    }
+    catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+});
+/**
+ * DELETE /admin/game/:gameId
+ * Delete game completely from database
+ */
+router.delete('/game/:gameId', async (req, res) => {
+    try {
+        const { gameId } = req.params;
+        // Stop game first if it's running
+        try {
+            await (0, gameLoop_1.stopGame)(gameId);
+        }
+        catch (err) {
+            // Ignore if already stopped
+        }
+        // Delete from database
+        const game = await game_model_1.GameModel.findOneAndDelete({ code: gameId });
+        if (!game) {
+            return res.status(404).json({ error: 'Game not found' });
+        }
+        res.json({ success: true, gameId, message: 'Game deleted successfully' });
     }
     catch (error) {
         res.status(400).json({ error: error.message });
@@ -357,6 +406,8 @@ router.get('/game/:gameId/state', async (req, res) => {
                 code: p.code || p.playerId,
                 playerId: p.code || p.playerId,
                 name: p.name,
+                logo: p.logo, // ✅ INCLUDE LOGO
+                slogan: p.slogan, // ✅ INCLUDE SLOGAN
                 position: p.position,
                 energy: p.energy,
                 score: p.score || 0,

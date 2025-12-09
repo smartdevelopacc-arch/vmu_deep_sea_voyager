@@ -41,11 +41,18 @@ curl -X POST http://localhost:3000/api/admin/game/bot-test-001/start
 
 ### 2. Chạy bot
 
+> Mẹo: Tham số CLI sẽ **ghi đè** biến trong `.env`. Có thể đặt sẵn `GAME_ID`, `PLAYER_ID`, `API_URL`, `ACTION_INTERVAL`, `PLAYER_SECRET` trong `.env` rồi chạy `npm start` không cần truyền thêm.
+
 ```bash
 cd testbot
 
 # Chạy 1 bot cho team_alpha
 npm start bot-test-001 team_alpha
+
+# Hoặc dùng biến môi trường (có sẵn trong .env)
+# GAME_ID=bot-test-001
+# PLAYER_ID=team_alpha
+npm start
 
 # Chạy bot với interval custom (2000ms)
 npm start bot-test-001 team_alpha http://localhost:3000/api 2000

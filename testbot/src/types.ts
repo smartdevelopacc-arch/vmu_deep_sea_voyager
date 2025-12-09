@@ -22,6 +22,8 @@ export interface BotConfig {
   apiUrl: string;
   /** Milliseconds between each action execution */
   actionInterval: number;
+  /** Optional player secret for authentication */
+  playerSecret?: string;
 }
 
 /**

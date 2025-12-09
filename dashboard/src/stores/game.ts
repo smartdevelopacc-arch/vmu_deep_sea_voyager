@@ -121,6 +121,16 @@ export const useGameStore = defineStore('games', () => {
     }
   }
 
+  async function deleteGame(gameId: string) {
+    try {
+      await adminAPI.deleteGame(gameId)
+      await fetchGames()
+    } catch (err: any) {
+      error.value = err.message
+      throw err
+    }
+  }
+
   async function resetGame(gameId: string) {
     try {
       await adminAPI.resetGame(gameId)
@@ -140,6 +150,7 @@ export const useGameStore = defineStore('games', () => {
     fetchGameState,
     startGame,
     stopGame,
+    deleteGame,
     resetGame,
     /** Incremental updates (socket-driven) */
     updateTurn(turn: number) {
