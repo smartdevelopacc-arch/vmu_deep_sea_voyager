@@ -50,37 +50,43 @@ export const importPlayers = async () => {
     try {
       const info: PlayerInfo = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
 
-      // ✅ NEW: Use player_secret from file if provided, otherwise generate or retrieve existing
+      // ✅ Check if player already exists
       const existingPlayer = await Player.findOne({ code: playerCode });
-      let secret: string;
       
-      if (info.player_secret) {
-        // Use secret from JSON file
-        secret = info.player_secret;
-      } else if (existingPlayer?.secret) {
-        // Keep existing secret from database
-        secret = existingPlayer.secret;
-      } else {
-        // Generate new random secret
-        secret = generatePlayerSecret();
+      // Prepare update data
+      const updateData: any = {
+        code: playerCode,
+        name: info.name,
+        slogan: info.slogan,
+        logo: info.logo || '', // Logo đã là base64 string trong JSON
+        score: 0,
+        energy: 100
+      };
+      
+      // Handle secret key logic:
+      // Support both 'player_secret' and 'secret' field names in JSON
+      // 1. If player_secret/secret in JSON → ALWAYS use it (overwrite existing or set new)
+      // 2. If no player_secret/secret in JSON and player exists → keep existing secret (don't overwrite)
+      // 3. If no player_secret/secret in JSON and new player → generate new secret
+      const jsonSecret = (info as any).player_secret || (info as any).secret;
+      if (jsonSecret) {
+        // Case 1: JSON has secret → ALWAYS use it (overwrite)
+        updateData.secret = jsonSecret;
+      } else if (!existingPlayer) {
+        // Case 3: New player, no secret in JSON → generate new
+        updateData.secret = generatePlayerSecret();
       }
+      // Case 2: Existing player, no secret in JSON → don't set secret field (MongoDB will keep existing value)
 
       // Upsert player vào database
-      await Player.findOneAndUpdate(
+      const savedPlayer = await Player.findOneAndUpdate(
         { code: playerCode },
-        {
-          code: playerCode,
-          name: info.name,
-          slogan: info.slogan,
-          logo: info.logo || '', // Logo đã là base64 string trong JSON
-          secret: secret, // ✅ NEW: Store player secret
-          score: 0,
-          energy: 100
-        },
+        updateData,
         { upsert: true, new: true }
       );
 
-      console.log(`✅ Imported player: ${playerCode} - ${info.name} (Secret: ${secret})`);
+      const displaySecret = savedPlayer.secret || 'N/A';
+      console.log(`✅ Imported player: ${playerCode} - ${info.name} (Secret: ${displaySecret})`);
     } catch (error: any) {
       console.error(`❌ Failed to import ${playerCode}:`, error.message);
     }
