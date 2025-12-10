@@ -168,7 +168,8 @@ class MultiBotRunner {
 
         const botProcess = spawn('npx', ['ts-node', path.join(__dirname, '../index.ts')], {
           env: botEnv,
-          stdio: 'inherit'
+          stdio: 'inherit',
+          shell: true  // Required for Windows to find npx
         });
 
         this.bots.set(playerId, {
