@@ -535,11 +535,17 @@ const saveMapContent = async (mapContent: any) => {
     
     console.log('✅ Map content saved:', response.data)
     
-    // Update local map
+    // Update local map and preserve selectedMap
+    const updatedMap = normalizeMap(response.data)
     const index = maps.value.findIndex(m => m._id === mapId)
     if (index >= 0) {
-      maps.value[index] = normalizeMap(response.data)
-      selectedMap.value = maps.value[index] || selectedMap.value
+      maps.value[index] = updatedMap
+    }
+    
+    // Update selectedMap to maintain _id
+    selectedMap.value = {
+      ...updatedMap,
+      _id: mapId // Ensure _id is preserved
     }
     
     alert('✅ Map content saved successfully')
