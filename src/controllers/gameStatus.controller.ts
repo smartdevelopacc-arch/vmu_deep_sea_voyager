@@ -60,7 +60,8 @@ export const getCompleteGameState = async (req: Request, res: Response) => {
         score: p.score,
         carriedTreasure: p.carriedTreasure || 0,
         trapCount: p.trapCount || 0,
-        slogan: dbPlayer?.slogan || p.slogan || '' // ✅ INCLUDE SLOGAN from DB player
+        slogan: dbPlayer?.slogan || p.slogan || '', // ✅ INCLUDE SLOGAN from DB player
+        lastScoreTime: p.lastScoreTime || dbPlayer?.lastScoreTime // ✅ INCLUDE lastScoreTime
       };
     });
 
@@ -77,6 +78,8 @@ export const getCompleteGameState = async (req: Request, res: Response) => {
     res.json({
       currentTurn: gameState.currentTurn,
       status: gameState.status,
+      startTime: game?.startTime, // ✅ ADDED: Game start time as timestamp from DB
+      startedAt: game?.startedAt, // ✅ ADDED: Game start time as Date from DB
       treasures: gameState.map.treasures,
       owners: gameState.map.owners,
       traps: trapsArray,

@@ -25,7 +25,8 @@ export const getResult = async (req: Request, res: Response) => {
         playerId: p.playerId,
         score: p.score || 0,
         energy: p.energy,
-        trapCount: p.trapCount
+        trapCount: p.trapCount,
+        lastScoreTime: p.lastScoreTime // ✅ ADDED: Include lastScoreTime in final results
       }))
       .sort((a: any, b: any) => b.score - a.score);
 

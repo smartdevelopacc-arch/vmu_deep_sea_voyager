@@ -68,6 +68,8 @@ export const useGameStore = defineStore('games', () => {
         gameId,
         currentTurn: state.currentTurn,
         status: state.status,
+        startTime: state.startTime, // ✅ ADDED: Capture startTime
+        startedAt: state.startedAt, // ✅ ADDED: Capture startedAt
         players: state.players || [],
         map: {
           width: state.map?.width,

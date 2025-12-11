@@ -244,7 +244,8 @@ export const loadGameState = async (gameId: string): Promise<GameState | null> =
         trapCount: trapCountByPlayer.get(playerId) || p.trapCount || 0,
         score: playerScore,
         isAtBase: playerIsAtBase,
-        baseIndex: playerIndex // ✅ ENHANCED: Store base index for reliable base assignment
+        baseIndex: playerIndex, // ✅ ENHANCED: Store base index for reliable base assignment
+        lastScoreTime: p.lastScoreTime // ✅ Load lastScoreTime from DB
         // NOTE: secret is NOT stored here - validated from global Player collection only
       });
     });

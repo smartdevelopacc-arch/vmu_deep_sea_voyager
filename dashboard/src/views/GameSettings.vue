@@ -249,9 +249,14 @@ const resetSettings = () => {
 };
 
 const saveMap = async () => {
+  if (!gameId) {
+    error.value = 'Map ID is missing';
+    return;
+  }
+  
   try {
     saving.value = true;
-    await apiClient.put(`/game/${gameId}/map`, {
+    await apiClient.put(`/admin/game/${gameId}/map`, {
       terrain: mapData.value.terrain,
       waves: mapData.value.waves,
       treasures: mapData.value.treasures,

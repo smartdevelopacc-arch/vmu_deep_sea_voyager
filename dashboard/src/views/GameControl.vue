@@ -26,7 +26,7 @@
               <th>#</th>
               <th>Team</th>
               <th>Final Score</th>
-              <th>Last Score Time</th>
+              <th>Fastest Time</th>
             </tr>
           </thead>
           <tbody>
@@ -47,7 +47,7 @@
                 </div>
               </td>
               <td class="score-cell">{{ row.score }}</td>
-              <td class="time-cell">{{ formatLastScoreTime(row.lastScoreTime) }}</td>
+              <td class="time-cell">{{ formatLastScoreTime(row.lastScoreTime, currentGame.startedAt || currentGame.startTime) }}</td>
             </tr>
           </tbody>
         </table>
@@ -321,7 +321,11 @@ const sortedPlayers = computed(() => {
 
 // Leaderboard data when game finished: prefer finalScores from server
 const finishedLeaderboard = computed(() => {
-  const finalScores: Array<{ playerId: string; score: number }> = (currentGame.value as any)?.finalScores || []
+  console.log('🏆 finishedLeaderboard computed - currentGame:', currentGame.value)
+  console.log('🏆 startTime:', currentGame.value?.startTime)
+  console.log('🏆 startedAt:', currentGame.value?.startedAt)
+  
+  const finalScores: Array<{ playerId: string; score: number; lastScoreTime?: Date | string }> = (currentGame.value as any)?.finalScores || []
   if (finalScores.length) {
     // Enrich with player code if available
     const playersById: Record<string, any> = {}
@@ -340,7 +344,19 @@ const finishedLeaderboard = computed(() => {
       globalByCode[gp.code] = gp
     }
     return [...finalScores]
-      .sort((a, b) => b.score - a.score)
+      .sort((a, b) => {
+        // Sort by score descending first
+        if (b.score !== a.score) return b.score - a.score
+        
+        // If scores are equal, sort by lastScoreTime ascending (earlier time wins)
+        if (a.lastScoreTime && b.lastScoreTime) {
+          return new Date(a.lastScoreTime).getTime() - new Date(b.lastScoreTime).getTime()
+        }
+        // Players without lastScoreTime go last
+        if (a.lastScoreTime && !b.lastScoreTime) return -1
+        if (!a.lastScoreTime && b.lastScoreTime) return 1
+        return 0
+      })
       .map(s => {
         const playerCode = playersById[s.playerId]?.code || s.playerId
         const displayName =
@@ -355,6 +371,7 @@ const finishedLeaderboard = computed(() => {
           globalByCode[playerCode]?.slogan ||
           ''
         console.log(`🏆 Player ${s.playerId} slogan: "${slogan}" (from playersById: "${playersById[s.playerId]?.slogan}" or globalByCode: "${globalByCode[playerCode]?.slogan}")`);
+        console.log(`🏆 Player ${s.playerId} lastScoreTime from finalScores:`, s.lastScoreTime, 'from playersById:', playersById[s.playerId]?.lastScoreTime);
         return {
           playerId: s.playerId,
           score: s.score,
@@ -364,7 +381,8 @@ const finishedLeaderboard = computed(() => {
           originalIndex: playerOriginalIndex[s.playerId] ?? 0,
           name: displayName,
           displayName,
-          slogan
+          slogan,
+          lastScoreTime: s.lastScoreTime || playersById[s.playerId]?.lastScoreTime // ✅ FIXED: Prefer lastScoreTime from finalScores
         }
       })
   }
@@ -384,9 +402,22 @@ const finishedLeaderboard = computed(() => {
       originalIndex,
       name: p.teamName || p.name || globalByCode[p.code]?.teamName || globalByCode[p.code]?.name,
       displayName: p.teamName || p.name || globalByCode[p.code]?.teamName || globalByCode[p.code]?.name || p.code || p.playerId,
-      slogan: p.slogan || globalByCode[p.code]?.slogan || ''
+      slogan: p.slogan || globalByCode[p.code]?.slogan || '',
+      lastScoreTime: p.lastScoreTime
     }))
-    .sort((a: any, b: any) => b.score - a.score)
+    .sort((a: any, b: any) => {
+      // Sort by score descending first
+      if (b.score !== a.score) return b.score - a.score
+      
+      // If scores are equal, sort by lastScoreTime ascending (earlier time wins)
+      if (a.lastScoreTime && b.lastScoreTime) {
+        return new Date(a.lastScoreTime).getTime() - new Date(b.lastScoreTime).getTime()
+      }
+      // Players without lastScoreTime go last
+      if (a.lastScoreTime && !b.lastScoreTime) return -1
+      if (!a.lastScoreTime && b.lastScoreTime) return 1
+      return 0
+    })
 })
 
 let tickListener: ((data: any) => void) | null = null
@@ -417,9 +448,9 @@ const handleStart = async () => {
     isActive.value = true
     await fetchState() // Refresh to get startTime
     startCountdown()
-    alert('Game started!')
+    console.log('Game started!')
   } catch (err) {
-    alert('Failed to start game')
+    console.error('Failed to start game', err)
   }
 }
 
@@ -428,9 +459,9 @@ const handleStop = async () => {
     await gameStore.stopGame(gameId)
     isActive.value = false
     stopCountdown()
-    alert('Game stopped!')
+    console.log('Game stopped!')
   } catch (err) {
-    alert('Failed to stop game')
+    console.error('Failed to stop game', err)
   }
 }
 
@@ -441,9 +472,9 @@ const handleReset = async () => {
   try {
     await gameStore.resetGame(gameId)
     await fetchState() // Refresh state after reset
-    alert('Game reset to initial state!')
+    console.log('Game reset to initial state!')
   } catch (err: any) {
-    alert('Failed to reset game: ' + (err.response?.data?.error || err.message))
+    console.error('Failed to reset game: ' + (err.response?.data?.error || err.message))
   }
 }
 
@@ -497,22 +528,61 @@ onMounted(() => {
   })
 })
 
-// Format last score time
-const formatLastScoreTime = (lastScoreTime: string | Date | undefined): string => {
-  if (!lastScoreTime) return '-'
+// Format last score time relative to game start time (MM:SS format)
+const formatLastScoreTime = (lastScoreTime: string | Date | undefined, gameStartTime: Date | number | undefined): string => {
+  console.log('🕐 formatLastScoreTime called:', { lastScoreTime, gameStartTime, gameStartTimeType: typeof gameStartTime })
+  
+  if (!lastScoreTime) {
+    console.log('🕐 No lastScoreTime, returning -')
+    return '-'
+  }
+  if (!gameStartTime) {
+    console.log('🕐 No gameStartTime, returning -')
+    return '-'
+  }
   
   try {
-    const date = new Date(lastScoreTime)
-    if (isNaN(date.getTime())) return '-'
+    const scoreDate = new Date(lastScoreTime)
+    if (isNaN(scoreDate.getTime())) {
+      console.log('🕐 Invalid scoreDate:', lastScoreTime)
+      return '-'
+    }
     
-    // Format: HH:MM:SS
-    return date.toLocaleTimeString('vi-VN', {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false
-    })
+    // Parse start time - handle both Date object and timestamp number
+    let startDate: Date
+    if (typeof gameStartTime === 'number') {
+      startDate = new Date(gameStartTime)
+    } else {
+      startDate = new Date(gameStartTime)
+    }
+    
+    if (isNaN(startDate.getTime())) {
+      console.warn('🕐 Invalid game start time:', gameStartTime)
+      return '-'
+    }
+    
+    console.log('🕐 Calculating duration:', { scoreDate: scoreDate.toISOString(), startDate: startDate.toISOString() })
+    
+    // Calculate difference in milliseconds from game start to last score
+    const diffMs = scoreDate.getTime() - startDate.getTime()
+    
+    if (diffMs < 0) {
+      console.warn('🕐 Score time is before start time', { scoreDate, startDate })
+      return '-'
+    }
+    
+    const totalSeconds = Math.floor(diffMs / 1000)
+    const minutes = Math.floor(totalSeconds / 60)
+    const seconds = totalSeconds % 60
+    const milliseconds = Math.floor((diffMs % 1000) / 10) // Get centiseconds (2 digits)
+    
+    const formatted = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${milliseconds.toString().padStart(2, '0')}`
+    console.log('🕐 Formatted time:', formatted)
+    
+    // Format as MM:SS.ms
+    return formatted
   } catch (error) {
+    console.error('🕐 Error formatting last score time:', error)
     return '-'
   }
 }
@@ -653,6 +723,12 @@ onUnmounted(() => {
 
 .finished-leaderboard .score-cell {
   font-weight: 600;
+}
+
+.finished-leaderboard .time-cell {
+  font-weight: 700;
+  color: #059669;
+  font-size: 1.1em;
 }
 
 .finished-leaderboard .team-slogan {

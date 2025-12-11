@@ -38,18 +38,18 @@ const fetchGames = () => {
 const startGame = async (gameId: string) => {
   try {
     await gameStore.startGame(gameId)
-    alert(`Game ${gameId} started!`)
+    console.log(`Game ${gameId} started!`)
   } catch (err) {
-    alert(`Failed to start game: ${err}`)
+    console.error(`Failed to start game: ${err}`)
   }
 }
 
 const stopGame = async (gameId: string) => {
   try {
     await gameStore.stopGame(gameId)
-    alert(`Game ${gameId} stopped!`)
+    console.log(`Game ${gameId} stopped!`)
   } catch (err) {
-    alert(`Failed to stop game: ${err}`)
+    console.error(`Failed to stop game: ${err}`)
   }
 }
 
@@ -60,10 +60,10 @@ const deleteGame = async (gameId: string) => {
   
   try {
     await gameStore.deleteGame(gameId)
-    alert(`Game ${gameId} deleted successfully!`)
+    console.log(`Game ${gameId} deleted successfully!`)
     await fetchGames()
   } catch (err) {
-    alert(`Failed to delete game: ${err}`)
+    console.error(`Failed to delete game: ${err}`)
   }
 }
 

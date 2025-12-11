@@ -135,16 +135,18 @@ export function useGameSocket(gameId: string, store: any, onAnyEvent?: (evt: any
     socket.value.on('game:end', (data) => {
       if (data?.gameId === gameId) {
         console.log('🏁 Game ended!', data.result)
+        console.log('🏁 Final scores with lastScoreTime:', data.result?.scores)
         // Update game status to finished
         if (store.currentGame) {
           store.currentGame.status = 'finished'
           // Persist final scores for leaderboard display after finish
           ;(store.currentGame as any).finalScores = data.result?.scores || []
+          console.log('🏁 Saved finalScores to store:', (store.currentGame as any).finalScores)
         }
         // Trigger any event handler
         onAnyEvent?.(data)
         // Optionally show alert or notification
-        alert(`Game finished!\nFinal scores: ${JSON.stringify(data.result.scores, null, 2)}`)
+        // alert(`Game finished!\nFinal scores: ${JSON.stringify(data.result.scores, null, 2)}`)
       }
     })
   })

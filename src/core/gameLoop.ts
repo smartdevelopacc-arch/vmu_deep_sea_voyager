@@ -851,7 +851,8 @@ const countTrapsForPlayer = (gameState: GameState, playerId: string): number => 
 const getScores = (gameState: GameState) => {
   return Array.from(gameState.players.values()).map(p => ({
     playerId: p.playerId,
-    score: p.score
+    score: p.score,
+    lastScoreTime: p.lastScoreTime // ✅ ADDED: Include lastScoreTime in scores
   }));
 };
 
