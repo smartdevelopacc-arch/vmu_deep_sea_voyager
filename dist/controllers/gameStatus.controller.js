@@ -56,7 +56,8 @@ const getCompleteGameState = async (req, res) => {
                 score: p.score,
                 carriedTreasure: p.carriedTreasure || 0,
                 trapCount: p.trapCount || 0,
-                slogan: dbPlayer?.slogan || p.slogan || '' // ✅ INCLUDE SLOGAN from DB player
+                slogan: dbPlayer?.slogan || p.slogan || '', // ✅ INCLUDE SLOGAN from DB player
+                lastScoreTime: p.lastScoreTime || dbPlayer?.lastScoreTime // ✅ INCLUDE lastScoreTime
             };
         });
         // Only return traps belonging to the requesting player
@@ -71,6 +72,9 @@ const getCompleteGameState = async (req, res) => {
         res.json({
             currentTurn: gameState.currentTurn,
             status: gameState.status,
+            startTime: game?.startTime, // ✅ ADDED: Game start time as timestamp from DB
+            startedAt: game?.startedAt, // ✅ ADDED: Game start time as Date from DB
+            settings: game?.settings || gameState.settings, // ✅ ADDED: Include game settings
             treasures: gameState.map.treasures,
             owners: gameState.map.owners,
             traps: trapsArray,

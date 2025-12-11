@@ -116,7 +116,7 @@
                   </td>
                   <td>
                     <div class="energy-bar-container">
-                      <div class="energy-bar" :style="getEnergyBarStyle(player.energy)">
+                      <div class="energy-bar" :style="getEnergyBarStyle(player.energy, currentGame?.settings?.maxEnergy || 100)">
                         <span class="energy-text">{{ player.energy }}</span>
                       </div>
                     </div>

@@ -14,6 +14,14 @@ export interface IMap extends Document {
     bases: number[][],
     waves: number[][],
     owners: string[][] | number[][], // Support both types for backward compatibility
+    settings?: { // ✅ ADDED: Game settings to import from map files
+        enableTraps?: boolean,
+        maxEnergy?: number,
+        energyRestore?: number,
+        maxTurns?: number,
+        timeLimitMs?: number,
+        tickIntervalMs?: number
+    },
     history?: Array<any>
 }
 
@@ -46,6 +54,17 @@ export const MapSchema = new Schema<IMap>({
     owners: {
         type: Schema.Types.Mixed, // Support both number[][] and string[][]
         required: false,
+    },
+    settings: { // ✅ ADDED: Game settings from map file
+        type: {
+            enableTraps: { type: Boolean },
+            maxEnergy: { type: Number },
+            energyRestore: { type: Number },
+            maxTurns: { type: Number },
+            timeLimitMs: { type: Number },
+            tickIntervalMs: { type: Number }
+        },
+        required: false
     },
     history: [{ type: Object }]
 }, {

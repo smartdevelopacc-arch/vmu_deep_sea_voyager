@@ -23,7 +23,8 @@ const getResult = async (req, res) => {
             playerId: p.playerId,
             score: p.score || 0,
             energy: p.energy,
-            trapCount: p.trapCount
+            trapCount: p.trapCount,
+            lastScoreTime: p.lastScoreTime // ✅ ADDED: Include lastScoreTime in final results
         }))
             .sort((a, b) => b.score - a.score);
         const winner = players[0];

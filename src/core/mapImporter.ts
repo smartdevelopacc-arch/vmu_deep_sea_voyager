@@ -6,7 +6,8 @@ import { connectDB } from './db';
 interface MapFile {
   name: string;
   description?: string;
-  gameId: string;
+  mapId?: string; // ✅ Use mapId from JSON file as primary map code
+  gameId?: string; // ✅ Legacy field, fallback to mapId
   mapData: {
     width: number;
     height: number;
@@ -21,6 +22,30 @@ interface MapFile {
     owners?: string[][] | number[][];
   };
   players?: any[];
+}
+
+/**
+ * Normalize settings field names to standard format
+ * Maps old field names to new ones
+ */
+function normalizeSettings(settings?: any) {
+  if (!settings) return {};
+  
+  const normalized: any = { ...settings };
+  
+  // Field name mappings: old name -> new name
+  if (normalized.gameTickInterval !== undefined && normalized.tickIntervalMs === undefined) {
+    normalized.tickIntervalMs = normalized.gameTickInterval;
+    delete normalized.gameTickInterval;
+  }
+  
+  if (normalized.timeLimit !== undefined && normalized.timeLimitMs === undefined) {
+    // timeLimit is in minutes, convert to milliseconds
+    normalized.timeLimitMs = normalized.timeLimit * 60000;
+    delete normalized.timeLimit;
+  }
+  
+  return normalized;
 }
 
 /**
@@ -94,11 +119,14 @@ export async function importMaps(options?: { verbose?: boolean; skipDuplicates?:
 
     for (const file of files) {
       const filePath = path.join(mapsDir, file);
-      const mapCode = path.basename(file, '.json'); // e.g., "map_so_ket_1"
+      const fileBaseName = path.basename(file, '.json'); // e.g., "test_map"
 
       try {
         const fileContent = fs.readFileSync(filePath, 'utf-8');
         const mapFile: MapFile = JSON.parse(fileContent);
+
+        // ✅ Use mapId from JSON file as primary, fallback to gameId, then filename
+        const mapCode = mapFile.mapId || mapFile.gameId || fileBaseName;
 
         // Extract map data
         const mapData = mapFile.mapData;
@@ -123,6 +151,7 @@ export async function importMaps(options?: { verbose?: boolean; skipDuplicates?:
           bases: mapData.bases,
           waves: mapData.waves || Array(mapData.height).fill(null).map(() => Array(mapData.width).fill(2)),
           owners: mapData.owners,
+          settings: normalizeSettings(mapData.settings), // ✅ NORMALIZE SETTINGS FIELD NAMES!
         };
 
         // Check if map already exists

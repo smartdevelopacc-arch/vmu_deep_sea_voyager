@@ -33,6 +33,17 @@ exports.MapSchema = new mongoose_1.Schema({
         type: mongoose_1.Schema.Types.Mixed, // Support both number[][] and string[][]
         required: false,
     },
+    settings: {
+        type: {
+            enableTraps: { type: Boolean },
+            maxEnergy: { type: Number },
+            energyRestore: { type: Number },
+            maxTurns: { type: Number },
+            timeLimitMs: { type: Number },
+            tickIntervalMs: { type: Number }
+        },
+        required: false
+    },
     history: [{ type: Object }]
 }, {
     versionKey: false,

@@ -69,7 +69,7 @@ const initializeGame = async (gameId, mapData, players) => {
             logo: player.logo,
             slogan: player.slogan, // ✅ INCLUDE SLOGAN!
             position: basePosition,
-            energy: maxEnergy,
+            energy: player.energy ?? maxEnergy, // ✅ Use player.energy if provided, otherwise use maxEnergy from settings
             trapCount: 0,
             score: 0,
             isAtBase: true
@@ -326,6 +326,7 @@ const processMove = (gameState, player, data, playersRammedThisTick) => {
     const maxEnergy = settings.maxEnergy ?? MAX_ENERGY;
     if (player.isAtBase && player.carriedTreasure && player.carriedTreasure > 0) {
         player.score += player.carriedTreasure;
+        player.lastScoreTime = new Date(); // Lưu thời điểm ghi điểm
         console.log(`🏆 Player ${player.playerId} auto-dropped treasure ${player.carriedTreasure} at base. New score: ${player.score}`);
         (0, socketEvents_1.emitScoreUpdate)(gameState.gameId, player.playerId, player.score);
         const { emitTreasureDropped } = require('./socketEvents');
@@ -661,7 +662,8 @@ const countTrapsForPlayer = (gameState, playerId) => {
 const getScores = (gameState) => {
     return Array.from(gameState.players.values()).map(p => ({
         playerId: p.playerId,
-        score: p.score
+        score: p.score,
+        lastScoreTime: p.lastScoreTime // ✅ ADDED: Include lastScoreTime in scores
     }));
 };
 const getMapSnapshot = (gameState) => {

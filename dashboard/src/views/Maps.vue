@@ -121,6 +121,76 @@
             </label>
           </div>
 
+          <!-- ✅ NEW: Map Settings Section -->
+          <div class="editor-section settings-section">
+            <h3>⚙️ Game Settings</h3>
+            
+            <div class="setting-group">
+              <label>
+                <input type="checkbox" v-model="mapSettingsEnableTraps">
+                Enable Traps
+              </label>
+            </div>
+
+            <div class="setting-group">
+              <label>Max Energy:</label>
+              <input 
+                type="number" 
+                v-model.number="mapSettingsMaxEnergy" 
+                min="10"
+                max="500"
+                class="input-field"
+              >
+            </div>
+
+            <div class="setting-group">
+              <label>Energy Restore per Turn:</label>
+              <input 
+                type="number" 
+                v-model.number="mapSettingsEnergyRestore" 
+                min="0"
+                max="50"
+                class="input-field"
+              >
+            </div>
+
+            <div class="setting-group">
+              <label>Max Turns:</label>
+              <input 
+                type="number" 
+                v-model.number="mapSettingsMaxTurns" 
+                min="100"
+                max="10000"
+                step="100"
+                class="input-field"
+              >
+            </div>
+
+            <div class="setting-group">
+              <label>Time Limit (minutes):</label>
+              <input 
+                type="number" 
+                v-model.number="mapSettingsTimeLimitMinutes" 
+                min="1"
+                max="60"
+                step="1"
+                class="input-field"
+              >
+            </div>
+
+            <div class="setting-group">
+              <label>Tick Interval (ms):</label>
+              <input 
+                type="number" 
+                v-model.number="mapSettingsTickIntervalMs" 
+                min="250"
+                max="5000"
+                step="50"
+                class="input-field"
+              >
+            </div>
+          </div>
+
           <div class="editor-actions">
             <button @click="saveMapMetadata" class="btn btn-success">💾 Save Metadata</button>
             <button @click="cancelEdit" class="btn btn-secondary">Cancel</button>
@@ -164,6 +234,14 @@ interface MapData {
   bases: number[][]
   waves?: number[][]
   owners?: (string | number)[][]
+  settings?: {
+    enableTraps?: boolean
+    maxEnergy?: number
+    energyRestore?: number
+    maxTurns?: number
+    timeLimitMs?: number
+    tickIntervalMs?: number
+  }
 }
 
 type NormalizedMap = MapData & {
@@ -230,6 +308,77 @@ const isCreateFormValid = computed(() => {
          newMapForm.value.height <= 100
 })
 
+const mapSettingsTimeLimitMinutes = computed({
+  get: () => {
+    const ms = editingMap.value.settings?.timeLimitMs || 300000
+    return Math.round((ms / 60000) * 10) / 10 // Round to 1 decimal place
+  },
+  set: (minutes: number) => {
+    if (editingMap.value.settings) {
+      editingMap.value.settings.timeLimitMs = Math.round(minutes * 60000)
+    }
+  }
+})
+
+const mapSettingsTickIntervalMs = computed({
+  get: () => {
+    return editingMap.value.settings?.tickIntervalMs || 500
+  },
+  set: (ms: number) => {
+    if (editingMap.value.settings) {
+      editingMap.value.settings.tickIntervalMs = ms
+    }
+  }
+})
+
+const mapSettingsEnableTraps = computed({
+  get: () => {
+    return editingMap.value.settings?.enableTraps ?? true
+  },
+  set: (value: boolean) => {
+    if (editingMap.value.settings) {
+      editingMap.value.settings.enableTraps = value
+    }
+  }
+})
+
+const mapSettingsMaxEnergy = computed({
+  get: () => {
+    return editingMap.value.settings?.maxEnergy || 100
+  },
+  set: (value: number) => {
+    console.log('🔧 Setting maxEnergy to:', value)
+    if (editingMap.value.settings) {
+      editingMap.value.settings.maxEnergy = value
+      console.log('✅ maxEnergy set, current settings:', editingMap.value.settings)
+    } else {
+      console.error('❌ editingMap.value.settings is undefined!')
+    }
+  }
+})
+
+const mapSettingsEnergyRestore = computed({
+  get: () => {
+    return editingMap.value.settings?.energyRestore || 10
+  },
+  set: (value: number) => {
+    if (editingMap.value.settings) {
+      editingMap.value.settings.energyRestore = value
+    }
+  }
+})
+
+const mapSettingsMaxTurns = computed({
+  get: () => {
+    return editingMap.value.settings?.maxTurns || 1200
+  },
+  set: (value: number) => {
+    if (editingMap.value.settings) {
+      editingMap.value.settings.maxTurns = value
+    }
+  }
+})
+
 const cancelCreate = () => {
   showCreateModal.value = false
   newMapForm.value = {
@@ -286,9 +435,36 @@ const submitCreateMap = async () => {
 }
 
 const selectMap = (map: MapData) => {
+  console.log('🔍 selectMap called with:', map.code, 'settings:', map.settings)
+  
   const normalized = normalizeMap(map)
   selectedMap.value = normalized
-  editingMap.value = { ...normalized }
+  
+  // Create a clean editing copy with all settings fields
+  editingMap.value = {
+    _id: normalized._id,
+    code: normalized.code,
+    name: normalized.name,
+    description: normalized.description,
+    width: normalized.width,
+    height: normalized.height,
+    disable: normalized.disable,
+    terrain: normalized.terrain,
+    treasures: normalized.treasures,
+    bases: normalized.bases,
+    waves: normalized.waves,
+    owners: normalized.owners,
+    settings: {
+      enableTraps: normalized.settings?.enableTraps ?? true,
+      maxEnergy: normalized.settings?.maxEnergy ?? 100,
+      energyRestore: normalized.settings?.energyRestore ?? 10,
+      maxTurns: normalized.settings?.maxTurns ?? 1200,
+      timeLimitMs: normalized.settings?.timeLimitMs ?? 300000,
+      tickIntervalMs: normalized.settings?.tickIntervalMs ?? 500
+    }
+  }
+  
+  console.log('✅ editingMap initialized with settings:', editingMap.value.settings)
   editorMode.value = 'metadata'
 }
 
@@ -301,23 +477,35 @@ const cancelEdit = () => {
 const saveMapMetadata = async () => {
   if (!selectedMap.value) return
   
+  console.log('💾 Saving map metadata:', {
+    name: editingMap.value.name,
+    settings: editingMap.value.settings
+  })
+  
   try {
     const response = await client.put(`/maps/${selectedMap.value._id}`, {
       name: editingMap.value.name,
       description: editingMap.value.description,
-      disable: editingMap.value.disable
+      disable: editingMap.value.disable,
+      settings: editingMap.value.settings
     })
     
-    // Update local map
-    const index = maps.value.findIndex(m => m._id === selectedMap.value?._id)
-    if (index >= 0) {
-      maps.value[index] = normalizeMap(response.data)
-      selectedMap.value = maps.value[index] || selectedMap.value
-    }
+    console.log('✅ Server response:', response.data)
     
     alert('✅ Map metadata saved successfully')
+    
+    // Clear editing state completely - like closing and reopening the page
+    selectedMap.value = null
+    editingMap.value = {}
+    editorMode.value = 'metadata'
+    
+    // Refresh the entire map list from server
+    await refreshMaps()
+    
   } catch (err: any) {
+    console.error('❌ Save error:', err)
     error.value = err.message || 'Failed to save map'
+    alert(`❌ Error: ${err.message || 'Failed to save map'}`)
   }
 }
 

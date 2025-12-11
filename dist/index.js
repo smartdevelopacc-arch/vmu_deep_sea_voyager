@@ -11,6 +11,7 @@ const db_1 = require("./core/db");
 const socket_1 = require("./socket");
 const routes_1 = __importDefault(require("./routes"));
 const playerImporter_1 = require("./core/playerImporter");
+const mapImporter_1 = require("./core/mapImporter");
 const rateLimitMiddleware_1 = require("./core/rateLimitMiddleware");
 const app = (0, express_1.default)();
 const PORT = process.env.PORT || 3000;
@@ -49,6 +50,7 @@ const startServer = async () => {
         await (0, db_1.connectDB)();
         // Import players từ thư mục assets/players/
         await (0, playerImporter_1.importPlayers)();
+        await (0, mapImporter_1.importMaps)({ skipDuplicates: true });
         // Start rate limit cleanup
         (0, rateLimitMiddleware_1.startRateLimitCleanup)();
         httpServer.listen(PORT, () => {

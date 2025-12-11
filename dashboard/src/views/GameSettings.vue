@@ -77,11 +77,11 @@
             type="number" 
             v-model.number="settings.tickIntervalMs" 
             :disabled="!canEdit"
-            min="500"
+            min="250"
             max="5000"
-            step="100"
+            step="50"
           >
-          <small>Time between game ticks in milliseconds (500-5000ms)</small>
+          <small>Time between game ticks in milliseconds (250-5000ms)</small>
         </div>
 
         <div class="actions">
@@ -206,7 +206,23 @@ const loadData = async () => {
 
     // Load settings
     const settingsRes = await apiClient.get(`/game/${gameId}/settings`);
-    settings.value = settingsRes.data.settings;
+    
+    // Merge API settings with defaults to ensure all fields exist
+    const defaultSettings = {
+      enableTraps: true,
+      maxEnergy: 100,
+      energyRestore: 10,
+      maxTurns: 1200,
+      timeLimitMs: 300000,
+      tickIntervalMs: 500
+    };
+    
+    settings.value = {
+      ...defaultSettings,
+      ...settingsRes.data.settings
+    };
+    
+    console.log('✅ Loaded game settings:', settings.value);
 
     // Load game status
     const statusRes = await apiClient.get(`/game/${gameId}/status`);

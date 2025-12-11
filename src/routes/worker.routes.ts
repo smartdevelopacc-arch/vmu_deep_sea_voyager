@@ -196,7 +196,7 @@ router.get('/game/:gameId/loop-status', async (req, res) => {
  */
 router.post('/game/init', async (req, res) => {
   try {
-    const { gameId, mapData, players } = req.body;
+    const { gameId, mapData, players, settings } = req.body;
     
     if (!gameId || !mapData || !players) {
       return res.status(400).json({ 
@@ -206,6 +206,15 @@ router.post('/game/init', async (req, res) => {
     
     // Auto-generate terrain nếu không có
     let processedMapData = { ...mapData };
+    
+    // ✅ Merge settings from request body into mapData.settings
+    if (settings) {
+      processedMapData.settings = {
+        ...processedMapData.settings,
+        ...settings
+      };
+      console.log('✅ Using settings from request:', processedMapData.settings);
+    }
     
     if (!processedMapData.terrain || processedMapData.terrain.length === 0) {
       const { width, height } = processedMapData;
@@ -343,6 +352,9 @@ router.post('/game/:gameId/reset', async (req, res) => {
     game.endedAt = undefined;
     game.runtimeState = undefined; // Xóa runtime state
     
+    // Get maxEnergy from game settings
+    const maxEnergy = game.settings?.maxEnergy ?? 100;
+    
     // Reset players về base positions
     game.players.forEach((player: any, index: number) => {
       const basePosition = game.map.bases[index];
@@ -351,7 +363,7 @@ router.post('/game/:gameId/reset', async (req, res) => {
           ? { x: basePosition[0], y: basePosition[1] }
           : basePosition;
       }
-      player.energy = 100;
+      player.energy = maxEnergy;
       player.score = 0;
       player.carriedTreasure = 0;
     });
@@ -502,8 +514,8 @@ router.put('/game/:gameId/settings', async (req: Request, res: Response) => {
     }
 
     // Validate tickIntervalMs if provided
-    if (tickIntervalMs !== undefined && tickIntervalMs < 500) {
-      return res.status(400).json({ error: 'Tick interval must be at least 500ms' });
+    if (tickIntervalMs !== undefined && tickIntervalMs < 250) {
+      return res.status(400).json({ error: 'Tick interval must be at least 250ms' });
     }
 
     // Update settings

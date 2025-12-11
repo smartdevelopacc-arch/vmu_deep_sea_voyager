@@ -70,6 +70,7 @@ export const useGameStore = defineStore('games', () => {
         status: state.status,
         startTime: state.startTime, // ✅ ADDED: Capture startTime
         startedAt: state.startedAt, // ✅ ADDED: Capture startedAt
+        settings: state.settings, // ✅ ADDED: Capture settings
         players: state.players || [],
         map: {
           width: state.map?.width,
@@ -81,6 +82,9 @@ export const useGameStore = defineStore('games', () => {
           traps: state.traps || [] // runtime traps
         }
       }
+      
+      console.log('🔍 currentGame.value:', currentGame.value)
+      console.log('🔍 settings from API:', state.settings)
       
       console.log('🔍 currentGame.value.map:', currentGame.value.map)
       console.log(`✅ Game state loaded: ${currentGame.value.players.length} players, ${state.map?.width}x${state.map?.height} map`)

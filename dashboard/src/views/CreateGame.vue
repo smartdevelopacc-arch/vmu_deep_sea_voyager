@@ -65,6 +65,64 @@
             <p><strong>{{ selectedMapData.name }}</strong></p>
             <p class="hint">{{ selectedMapData.width }}x{{ selectedMapData.height }} - {{ selectedMapData.description }}</p>
           </div>
+
+          <!-- ✅ NEW: Map Settings Section -->
+          <div v-if="selectedMapData" class="map-settings-section">
+            <h3>📋 Map Settings</h3>
+            <div class="form-group">
+              <label>
+                <input type="checkbox" v-model="mapSettings.enableTraps">
+                Enable Traps
+              </label>
+            </div>
+            <div class="form-group">
+              <label>Max Energy</label>
+              <input 
+                type="number" 
+                v-model.number="mapSettings.maxEnergy" 
+                min="10"
+                max="500"
+              >
+            </div>
+            <div class="form-group">
+              <label>Energy Restore per Turn</label>
+              <input 
+                type="number" 
+                v-model.number="mapSettings.energyRestore" 
+                min="0"
+                max="50"
+              >
+            </div>
+            <div class="form-group">
+              <label>Max Turns</label>
+              <input 
+                type="number" 
+                v-model.number="mapSettings.maxTurns" 
+                min="100"
+                max="10000"
+              >
+            </div>
+            <div class="form-group">
+              <label>Time Limit (minutes)</label>
+              <input 
+                type="number" 
+                v-model.number="mapSettingsTimeLimit" 
+                min="1"
+                max="60"
+                step="0.5"
+              >
+            </div>
+            <div class="form-group">
+              <label>Tick Interval (ms)</label>
+              <input 
+                type="number" 
+                v-model.number="mapSettings.tickIntervalMs" 
+                min="250"
+                max="5000"
+                step="50"
+              >
+            </div>
+          </div>
         </div>
 
         <div v-if="mapConfigMode === 'custom'" class="tab-content">
@@ -172,6 +230,20 @@ const submitting = ref(false)
 const error = ref('')
 const success = ref('')
 
+// ✅ NEW: Map settings for when selecting from map bank
+const mapSettings = ref({
+  enableTraps: true,
+  maxEnergy: 100,
+  energyRestore: 10,
+  maxTurns: 1200,
+  timeLimitMs: 300000, // 5 minutes
+  tickIntervalMs: 500
+})
+const mapSettingsTimeLimit = computed({
+  get: () => mapSettings.value.timeLimitMs / 60000, // Convert ms to minutes
+  set: (val) => { mapSettings.value.timeLimitMs = val * 60000 }
+})
+
 const availablePlayers = computed(() => playerStore.players)
 
 const canSubmit = computed(() => {
@@ -234,6 +306,20 @@ const loadMapFromBank = async () => {
       width: response.data.width,
       height: response.data.height
     }
+    
+    // ✅ Load settings from the map
+    if (response.data.settings) {
+      mapSettings.value = {
+        enableTraps: response.data.settings.enableTraps ?? true,
+        maxEnergy: response.data.settings.maxEnergy ?? 100,
+        energyRestore: response.data.settings.energyRestore ?? 10,
+        maxTurns: response.data.settings.maxTurns ?? 1200,
+        timeLimitMs: response.data.settings.timeLimitMs ?? 300000,
+        tickIntervalMs: response.data.settings.tickIntervalMs ?? 500
+      }
+      console.log('✅ Loaded map settings:', mapSettings.value)
+    }
+    
     selectedTemplate.value = ''
   } catch (err: any) {
     error.value = 'Failed to load map from bank'
@@ -376,14 +462,17 @@ const handleSubmit = async () => {
       logo: p.logo,
       teamId: `team${i + 1}`,
       position: mapData.bases[i],
-      energy: 100
+      energy: mapSettings.value.maxEnergy // ✅ Use maxEnergy from settings
     }))
     
     const payload = {
       gameId: form.value.gameId,
       mapData,
-      players
+      players,
+      settings: mapConfigMode.value === 'bank' ? mapSettings.value : undefined // ✅ Include map settings when using bank map
     }
+    
+    console.log('🎮 Creating game with payload:', payload)
     
     await adminAPI.initGame(payload)
     

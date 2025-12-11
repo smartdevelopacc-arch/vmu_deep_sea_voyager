@@ -17,7 +17,8 @@ exports.PlayerSchema = new mongoose_1.Schema({
     },
     carriedTreasure: { type: Number, required: false },
     trapCount: { type: Number, required: false, default: 0 },
-    moveHistory: [{ turn: Number, position: { x: Number, y: Number } }]
+    moveHistory: [{ turn: Number, position: { x: Number, y: Number } }],
+    lastScoreTime: { type: Date, required: false } // Thời điểm ghi điểm cuối cùng
 }, {
     versionKey: false,
     toJSON: {

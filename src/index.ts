@@ -6,6 +6,7 @@ import { connectDB } from './core/db';
 import { setupSocket } from './socket';
 import routes from './routes';
 import { importPlayers } from './core/playerImporter';
+import { importMaps } from './core/mapImporter';
 import { startRateLimitCleanup } from './core/rateLimitMiddleware';
 
 const app = express();
@@ -54,6 +55,7 @@ const startServer = async () => {
     
     // Import players từ thư mục assets/players/
     await importPlayers();
+    await importMaps({ skipDuplicates: true});
     
     // Start rate limit cleanup
     startRateLimitCleanup();

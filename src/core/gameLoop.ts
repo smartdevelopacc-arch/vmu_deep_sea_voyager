@@ -156,7 +156,7 @@ export const initializeGame = async (gameId: string, mapData: any, players: any[
       logo: player.logo,
       slogan: player.slogan, // ✅ INCLUDE SLOGAN!
       position: basePosition,
-      energy: maxEnergy,
+      energy: player.energy ?? maxEnergy, // ✅ Use player.energy if provided, otherwise use maxEnergy from settings
       trapCount: 0,
       score: 0,
       isAtBase: true

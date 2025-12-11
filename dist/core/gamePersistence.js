@@ -21,7 +21,8 @@ const saveGameState = async (gameState) => {
             carriedTreasure: p.carriedTreasure,
             trapCount: p.trapCount,
             isAtBase: p.isAtBase,
-            moveHistory: []
+            moveHistory: [],
+            lastScoreTime: p.lastScoreTime // Thời điểm ghi điểm cuối cùng
         }));
         console.log(`[DEBUG] Players array: ${playersArray.length} players`);
         // Chuyển đổi traps Map thành array of objects for storage
@@ -177,7 +178,8 @@ const loadGameState = async (gameId) => {
                 trapCount: trapCountByPlayer.get(playerId) || p.trapCount || 0,
                 score: playerScore,
                 isAtBase: playerIsAtBase,
-                baseIndex: playerIndex // ✅ ENHANCED: Store base index for reliable base assignment
+                baseIndex: playerIndex, // ✅ ENHANCED: Store base index for reliable base assignment
+                lastScoreTime: p.lastScoreTime // ✅ Load lastScoreTime from DB
                 // NOTE: secret is NOT stored here - validated from global Player collection only
             });
         });

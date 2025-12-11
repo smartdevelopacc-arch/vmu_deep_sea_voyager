@@ -10,7 +10,7 @@ const router = Router();
 router.get('/', async (req: Request, res: Response) => {
   try {
     // Get all maps, ordered by code
-    const maps = await Map.find({}, 'code name description width height disable bases treasures waves')
+    const maps = await Map.find({}, 'code name description width height disable terrain bases treasures waves settings')
       .lean()
       .sort({ code: 1 })
       .exec();
@@ -106,7 +106,7 @@ router.post('/', async (req: Request, res: Response) => {
 router.put('/:mapId', async (req: Request, res: Response) => {
   try {
     const { mapId } = req.params;
-    const { name, description, disable, terrain, treasures, waves, bases } = req.body;
+    const { name, description, disable, terrain, treasures, waves, bases, settings } = req.body;
 
     const updates: any = {};
     
@@ -114,6 +114,9 @@ router.put('/:mapId', async (req: Request, res: Response) => {
     if (name !== undefined) updates.name = name;
     if (description !== undefined) updates.description = description;
     if (disable !== undefined) updates.disable = disable;
+    
+    // Settings updates
+    if (settings !== undefined) updates.settings = settings;
     
     // Content updates
     if (terrain !== undefined) updates.terrain = terrain;
