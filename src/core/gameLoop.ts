@@ -84,6 +84,7 @@ interface PlayerState {
   score: number;
   isAtBase: boolean;
   baseIndex?: number; // Index of this player's base for reliable base assignment
+  lastScoreTime?: Date; // Thời điểm ghi điểm cuối cùng
 }
 
 interface MapState {
@@ -456,6 +457,7 @@ const processMove = (gameState: GameState, player: PlayerState, data: { target: 
 
   if (player.isAtBase && player.carriedTreasure && player.carriedTreasure > 0) {
     player.score += player.carriedTreasure;
+    player.lastScoreTime = new Date(); // Lưu thời điểm ghi điểm
     console.log(`🏆 Player ${player.playerId} auto-dropped treasure ${player.carriedTreasure} at base. New score: ${player.score}`);
     emitScoreUpdate(gameState.gameId, player.playerId, player.score);
     const { emitTreasureDropped } = require('./socketEvents');

@@ -26,6 +26,7 @@
               <th>#</th>
               <th>Team</th>
               <th>Final Score</th>
+              <th>Last Score Time</th>
             </tr>
           </thead>
           <tbody>
@@ -46,6 +47,7 @@
                 </div>
               </td>
               <td class="score-cell">{{ row.score }}</td>
+              <td class="time-cell">{{ formatLastScoreTime(row.lastScoreTime) }}</td>
             </tr>
           </tbody>
         </table>
@@ -494,6 +496,26 @@ onMounted(() => {
     }
   })
 })
+
+// Format last score time
+const formatLastScoreTime = (lastScoreTime: string | Date | undefined): string => {
+  if (!lastScoreTime) return '-'
+  
+  try {
+    const date = new Date(lastScoreTime)
+    if (isNaN(date.getTime())) return '-'
+    
+    // Format: HH:MM:SS
+    return date.toLocaleTimeString('vi-VN', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    })
+  } catch (error) {
+    return '-'
+  }
+}
 
 
 onUnmounted(() => {

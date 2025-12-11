@@ -13,7 +13,8 @@ export interface IPlayer extends Document {
     position: { x: number, y: number },
     carriedTreasure?: number,
     trapCount?: number,
-    moveHistory?: Array<{ turn: number, position: { x: number, y: number } }>
+    moveHistory?: Array<{ turn: number, position: { x: number, y: number } }>,
+    lastScoreTime?: Date // Thời điểm ghi điểm cuối cùng
 }
 
 export const PlayerSchema = new Schema<IPlayer>({
@@ -30,7 +31,8 @@ export const PlayerSchema = new Schema<IPlayer>({
     },
     carriedTreasure: { type: Number, required: false },
     trapCount: { type: Number, required: false, default: 0 },
-    moveHistory: [{ turn: Number, position: { x: Number, y: Number } }]
+    moveHistory: [{ turn: Number, position: { x: Number, y: Number } }],
+    lastScoreTime: { type: Date, required: false } // Thời điểm ghi điểm cuối cùng
 }, {
     versionKey: false,
 

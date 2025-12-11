@@ -19,6 +19,7 @@ interface PlayerState {
   score: number;
   isAtBase: boolean;
   baseIndex?: number; // ✅ NEW: Index of this player's base for reliable base assignment
+  lastScoreTime?: Date; // Thời điểm ghi điểm cuối cùng
   // NOTE: secret is NOT stored here - it's only in global Player collection for auth
 }
 
@@ -71,7 +72,8 @@ export const saveGameState = async (gameState: GameState): Promise<void> => {
       carriedTreasure: p.carriedTreasure,
       trapCount: p.trapCount,
       isAtBase: p.isAtBase,
-      moveHistory: []
+      moveHistory: [],
+      lastScoreTime: p.lastScoreTime // Thời điểm ghi điểm cuối cùng
     }));
 
     console.log(`[DEBUG] Players array: ${playersArray.length} players`);
